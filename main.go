@@ -107,7 +107,6 @@ var (
 )
 
 func main() {
-
 	nodes[1] = newNode(1, []raft.Peer{{ID: 1}, {ID: 2}, {ID: 3}})
 	nodes[2] = newNode(2, []raft.Peer{{ID: 1}, {ID: 2}, {ID: 3}})
 	nodes[3] = newNode(3, []raft.Peer{})
