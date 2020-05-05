@@ -1,5 +1,6 @@
 # RAFT-KV-Store
 
+```
 go build -o kv
 ./kv -id node0 ~/node-0
 ./kv -id node1 -haddr :11001 -raddr :12001 -join :11000 ~/node-1
@@ -19,3 +20,4 @@ curl -vvv localhost:11001/transaction -d '{"commands": [{"Command": "set", "Key"
 
 Get:
 curl -vvv localhost:11002/key/timezone
+```
