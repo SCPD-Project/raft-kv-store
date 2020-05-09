@@ -8,11 +8,14 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -26,6 +29,7 @@ import (
 const (
 	retainSnapshotCount = 2
 	raftTimeout         = 10 * time.Second
+	nodeIDLen = 5
 )
 
 type RaftCommand struct {
@@ -34,46 +38,79 @@ type RaftCommand struct {
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.
 type Store struct {
-	RaftDir  string
-	RaftBind string
+	ID string
+	RaftDir         string
+	RaftBindAddress string
 
 	mu sync.Mutex
-	m  map[string]string // The key-value store for the system.
+	kv map[string]string // The key-value store for the system.
 
 	transactionInProgress bool
 	t                     sync.Mutex
 
 	raft *raft.Raft // The consensus mechanism
-
 	logger *log.Logger
-
 	file *os.File // persistent store
 }
 
-// New returns a new Store.
-func New() *Store {
+// NewStore returns a new Store.
+func NewStore(nodeID, raftAddress, raftDir string) *Store {
+	if nodeID == "" {
+		nodeID = "node-" + randNodeID(nodeIDLen)
+	}
+	if raftDir == "" {
+		raftDir = fmt.Sprintf("./%s", nodeID)
+	}
+	log.Printf("Preparing node-%s with persistent diretory %s, raftAddress %s", nodeID, raftDir, raftAddress)
+	os.MkdirAll(raftDir, 0700)
 	s := &Store{
-		m:      make(map[string]string),
+		ID: nodeID,
+		RaftBindAddress: raftAddress,
+		RaftDir: raftDir,
+		kv:     make(map[string]string),
 		logger: log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
-
 	return s
 }
 
-// Open opens the store. If enableSingle is set, and there are no existing peers,
-// then this node becomes the first node, and therefore leader, of the cluster.
-// localID should be the server identifier for this node.
-func (s *Store) Open(enableSingle bool, localID string) error {
-	// Setup Raft configuration.
-	config := raft.DefaultConfig()
-	config.LocalID = raft.ServerID(localID)
+func randNodeID(n int) string {
+	letters := []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+	rand.Seed(time.Now().UnixNano())
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
 
-	// Setup Raft communication.
-	addr, err := net.ResolveTCPAddr("tcp", s.RaftBind)
+func Join(joinAddr, raftAddr, nodeID string) error {
+	b, err := json.Marshal(map[string]string{"addr": raftAddr, "id": nodeID})
 	if err != nil {
 		return err
 	}
-	transport, err := raft.NewTCPTransport(s.RaftBind, addr, 3, 10*time.Second, os.Stderr)
+	resp, err := http.Post(fmt.Sprintf("http://%s/join", joinAddr), "application-type/json", bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
+}
+
+
+// Open opens the store. If enableSingle is set, and there are no existing peers,
+// then this node becomes the first node, and therefore leader, of the cluster.
+func (s *Store) Open(enableSingle bool) error {
+	// Setup Raft configuration.
+	config := raft.DefaultConfig()
+	config.LocalID = raft.ServerID(s.ID)
+
+	// Setup Raft communication.
+	addr, err := net.ResolveTCPAddr("tcp", s.RaftBindAddress)
+	if err != nil {
+		return err
+	}
+	transport, err := raft.NewTCPTransport(s.RaftBindAddress, addr, 3, 10*time.Second, os.Stderr)
 	if err != nil {
 		return err
 	}
@@ -102,16 +139,17 @@ func (s *Store) Open(enableSingle bool, localID string) error {
 	}
 	s.raft = ra
 
-	configuration := raft.Configuration{
-		Servers: []raft.Server{
-			{
-				ID:      config.LocalID,
-				Address: transport.LocalAddr(),
+	if enableSingle {
+		configuration := raft.Configuration{
+			Servers: []raft.Server{
+				{
+					ID:      config.LocalID,
+					Address: transport.LocalAddr(),
+				},
 			},
-		},
+		}
+		ra.BootstrapCluster(configuration)
 	}
-	ra.BootstrapCluster(configuration)
-
 	return nil
 }
 
@@ -121,7 +159,7 @@ func (s *Store) Get(key string) (string, error) {
 	defer s.mu.Unlock()
 
 	log.Print("Processing Get request", key)
-	val, ok := s.m[key]
+	val, ok := s.kv[key]
 	if !ok {
 		return "", fmt.Errorf("Key does not exist")
 	}
@@ -289,7 +327,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 
 	// Clone the map.
 	o := make(map[string]string)
-	for k, v := range f.m {
+	for k, v := range f.kv {
 		o[k] = v
 	}
 	return &fsmSnapshot{store: o}, nil
@@ -304,21 +342,21 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 
 	// Set the state from the snapshot, no lock required according to
 	// Hashicorp docs.
-	f.m = o
+	f.kv = o
 	return nil
 }
 
 func (f *fsm) applySet(key, value string) interface{} {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	f.m[key] = value
+	f.kv[key] = value
 	return nil
 }
 
 func (f *fsm) applyDelete(key string) interface{} {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	delete(f.m, key)
+	delete(f.kv, key)
 	return nil
 }
 
@@ -331,9 +369,9 @@ func (f *fsm) applyTransaction(ops []httpd.Ops) interface{} {
 
 		switch c.Command {
 		case "set":
-			f.m[c.Key] = c.Value
+			f.kv[c.Key] = c.Value
 		case "delete":
-			delete(f.m, c.Key)
+			delete(f.kv, c.Key)
 		}
 	}
 	return nil
