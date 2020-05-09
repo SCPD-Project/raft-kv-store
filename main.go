@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	httpd "github.com/RAFT-KV-STORE/http"
-	"github.com/RAFT-KV-STORE/node"
 	"github.com/RAFT-KV-STORE/store"
 	flag "github.com/spf13/pflag"
 	"log"
@@ -40,24 +39,11 @@ func init() {
 func main() {
 	flag.Parse()
 
+	kv := store.NewStore(nodeID, raftAddress, raftDir)
+	kv.Open(joinHttpAddress == "")
 
-	s := store.NewStore(nodeID, raftAddress, raftDir)
-
-	if err := s.Open(joinHttpAddress == ""); err != nil {
-		log.Fatalf("failed to open store: %s", err.Error())
-	}
-
-	h := httpd.New(listenAddress, s)
-	if err := h.Start(); err != nil {
-		log.Fatalf("failed to start HTTP service: %s", err.Error())
-	}
-
-	// If join was specified, make the join request.
-	if joinHttpAddress != "" {
-		if err := store.Join(joinHttpAddress, raftAddress, nodeID); err != nil {
-			log.Fatalf("failed to join node at %s: %s", joinHttpAddress, err.Error())
-		}
-	}
+	h := httpd.NewService(listenAddress, kv)
+	h.Start(joinHttpAddress)
 
 	log.Println("raftd started successfully")
 

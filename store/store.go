@@ -8,23 +8,27 @@
 package store
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"math/rand"
 	"net"
-	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
-	httpd "github.com/RAFT-KV-STORE/http"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 )
+
+// Ops indicate transaction ops
+type Ops struct {
+	Command string `json:"Command"`
+	Key     string `json:"Key"`
+	Value   string `json:"Value"`
+}
 
 const (
 	retainSnapshotCount = 2
@@ -33,14 +37,14 @@ const (
 )
 
 type RaftCommand struct {
-	Ops []httpd.Ops `json:"ops,omitempty"`
+	Ops []Ops `json:"ops,omitempty"`
 }
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.
 type Store struct {
-	ID string
-	RaftDir         string
-	RaftBindAddress string
+	ID          string
+	RaftDir     string
+	RaftAddress string
 
 	mu sync.Mutex
 	kv map[string]string // The key-value store for the system.
@@ -64,11 +68,11 @@ func NewStore(nodeID, raftAddress, raftDir string) *Store {
 	log.Printf("Preparing node-%s with persistent diretory %s, raftAddress %s", nodeID, raftDir, raftAddress)
 	os.MkdirAll(raftDir, 0700)
 	s := &Store{
-		ID: nodeID,
-		RaftBindAddress: raftAddress,
-		RaftDir: raftDir,
-		kv:     make(map[string]string),
-		logger: log.New(os.Stderr, "[store] ", log.LstdFlags),
+		ID:          nodeID,
+		RaftAddress: raftAddress,
+		RaftDir:     raftDir,
+		kv:          make(map[string]string),
+		logger:      log.New(os.Stderr, "[store] ", log.LstdFlags),
 	}
 	return s
 }
@@ -83,42 +87,29 @@ func randNodeID(n int) string {
 	return string(b)
 }
 
-func Join(joinAddr, raftAddr, nodeID string) error {
-	b, err := json.Marshal(map[string]string{"addr": raftAddr, "id": nodeID})
-	if err != nil {
-		return err
-	}
-	resp, err := http.Post(fmt.Sprintf("http://%s/join", joinAddr), "application-type/json", bytes.NewReader(b))
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	return nil
-}
-
 
 // Open opens the store. If enableSingle is set, and there are no existing peers,
 // then this node becomes the first node, and therefore leader, of the cluster.
-func (s *Store) Open(enableSingle bool) error {
+func (s *Store) Open(enableSingle bool) {
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()
 	config.LocalID = raft.ServerID(s.ID)
 
 	// Setup Raft communication.
-	addr, err := net.ResolveTCPAddr("tcp", s.RaftBindAddress)
-	if err != nil {
-		return err
+	var TCPaddress *net.TCPAddr
+	var transport *raft.NetworkTransport
+	var err error
+	var snapshots *raft.FileSnapshotStore
+	if TCPaddress, err = net.ResolveTCPAddr("tcp", s.RaftAddress); err != nil {
+		log.Fatalf("failed to resolve TCP address %s: %s", s.RaftAddress, err)
 	}
-	transport, err := raft.NewTCPTransport(s.RaftBindAddress, addr, 3, 10*time.Second, os.Stderr)
-	if err != nil {
-		return err
+	if transport, err = raft.NewTCPTransport(s.RaftAddress, TCPaddress, 3, 10*time.Second, os.Stderr); err != nil {
+		log.Fatalf("failed to make TCP transport on %s: %s", s.RaftAddress, err.Error())
 	}
 
 	// Create the snapshot store. This allows the Raft to truncate the log.
-	snapshots, err := raft.NewFileSnapshotStore(s.RaftDir, retainSnapshotCount, os.Stderr)
-	if err != nil {
-		return fmt.Errorf("file snapshot store: %s", err)
+	if snapshots, err = raft.NewFileSnapshotStore(s.RaftDir, retainSnapshotCount, os.Stderr); err != nil {
+		log.Fatalf("failed to create snapshot store at %s: %s", s.RaftDir, err.Error())
 	}
 
 	// Create the log store and stable store.
@@ -127,7 +118,7 @@ func (s *Store) Open(enableSingle bool) error {
 
 	boltDB, err := raftboltdb.NewBoltStore(filepath.Join(s.RaftDir, "raft.db"))
 	if err != nil {
-		return fmt.Errorf("new bolt store: %s", err)
+		log.Fatalf("failed to create new bolt store: %s", err)
 	}
 	logStore = boltDB
 	stableStore = boltDB
@@ -135,7 +126,7 @@ func (s *Store) Open(enableSingle bool) error {
 	// Instantiate the Raft systems.
 	ra, err := raft.NewRaft(config, (*fsm)(s), logStore, stableStore, snapshots, transport)
 	if err != nil {
-		return fmt.Errorf("new raft: %s", err)
+		log.Fatalf("failed to create new raft: %s", err)
 	}
 	s.raft = ra
 
@@ -150,7 +141,6 @@ func (s *Store) Open(enableSingle bool) error {
 		}
 		ra.BootstrapCluster(configuration)
 	}
-	return nil
 }
 
 // Get returns the value for the given key.
@@ -175,7 +165,7 @@ func (s *Store) Set(key, value string) error {
 
 	log.Printf("Processing Set request :%s :%s", key, value)
 	c := &RaftCommand{
-		Ops: []httpd.Ops{
+		Ops: []Ops{
 			{
 				Command: "set",
 				Key:     key,
@@ -200,7 +190,7 @@ func (s *Store) Delete(key string) error {
 	}
 
 	c := &RaftCommand{
-		Ops: []httpd.Ops{
+		Ops: []Ops{
 			{
 				Command: "delete",
 				Key:     key,
@@ -218,7 +208,7 @@ func (s *Store) Delete(key string) error {
 }
 
 // Transaction atomically executes the transaction .
-func (s *Store) Transaction(ops []httpd.Ops) error {
+func (s *Store) Transaction(ops []Ops) error {
 	if s.raft.State() != raft.Leader {
 		return fmt.Errorf("not leader")
 	}
@@ -361,7 +351,7 @@ func (f *fsm) applyDelete(key string) interface{} {
 }
 
 // return transaction result
-func (f *fsm) applyTransaction(ops []httpd.Ops) interface{} {
+func (f *fsm) applyTransaction(ops []Ops) interface{} {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 

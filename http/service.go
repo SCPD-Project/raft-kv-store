@@ -3,7 +3,10 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/RAFT-KV-STORE/store"
 	"io"
 	"log"
 	"net"
@@ -11,16 +14,9 @@ import (
 	"strings"
 )
 
-// Ops indicate transaction ops
-type Ops struct {
-	Command string `json:"Command"`
-	Key     string `json:"Key"`
-	Value   string `json:"Value"`
-}
-
 // TransactionOps ...
 type TransactionOps struct {
-	Commands []Ops `json:"Commands"`
+	Commands []store.Ops `json:"Commands"`
 }
 
 // Store is the interface Raft-backed key-value stores must implement.
@@ -35,7 +31,7 @@ type Store interface {
 	Delete(key string) error
 
 	// Transaction executes all the ops atomically
-	Transaction(ops []Ops) error
+	Transaction(ops []store.Ops) error
 
 	// Leader returns the current leader of the cluster
 	Leader() string
@@ -48,12 +44,11 @@ type Store interface {
 type Service struct {
 	addr string
 	ln   net.Listener
-
-	store Store
+	store *store.Store
 }
 
 // New returns an uninitialized HTTP service.
-func New(addr string, store Store) *Service {
+func NewService(addr string, store *store.Store) *Service {
 	return &Service{
 		addr:  addr,
 		store: store,
@@ -61,14 +56,14 @@ func New(addr string, store Store) *Service {
 }
 
 // Start starts the service.
-func (s *Service) Start() error {
+func (s *Service) Start(joinHttpAddress string) {
 	server := http.Server{
 		Handler: s,
 	}
 
 	ln, err := net.Listen("tcp", s.addr)
 	if err != nil {
-		return err
+		log.Fatalf("failed to start HTTP service: %s", err.Error())
 	}
 	s.ln = ln
 
@@ -77,11 +72,18 @@ func (s *Service) Start() error {
 	go func() {
 		err := server.Serve(s.ln)
 		if err != nil {
-			log.Fatalf("HTTP serve: %s", err)
+			log.Fatalf("HTTP serve error: %s", err)
 		}
 	}()
 
-	return nil
+	if joinHttpAddress != "" {
+		b, _ := json.Marshal(map[string]string{"addr": s.store.RaftAddress, "id": s.store.ID})
+		resp, err := http.Post(fmt.Sprintf("http://%s/join", joinHttpAddress), "application-type/json", bytes.NewReader(b))
+		if err != nil {
+			log.Fatalf("failed to join %s: %s", joinHttpAddress, err)
+		}
+		defer resp.Body.Close()
+	}
 }
 
 // Close closes the service.
