@@ -33,7 +33,7 @@ curl -v localhost:11002/key/class-3
 curl -vvv localhost:11001/transaction -d '{"commands": [{"Command": "set", "Key": "name", "Value": "John"},{"Command": "set", "Key": "timezone", "Value": "pst"}]}'
 ```
 
-##Get:
+## Get:
 ```
 curl -vvv localhost:11002/key/timezone
 ```
