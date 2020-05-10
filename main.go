@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	httpd "github.com/RAFT-KV-STORE/http"
-	"github.com/RAFT-KV-STORE/store"
+	httpd "github.com/SCPD-Project/RAFT-KV-STORE/http"
+	"github.com/SCPD-Project/RAFT-KV-STORE/store"
 	flag "github.com/spf13/pflag"
 	"log"
 	"os"
@@ -22,6 +22,7 @@ var (
 	joinHttpAddress string
 	raftDir         string
 	nodeID          string
+	persistDir      string
 )
 
 func init() {
@@ -30,6 +31,7 @@ func init() {
 	flag.StringVarP(&joinHttpAddress, "join", "j", "", "Set joining HTTP address, if any")
 	flag.StringVarP(&nodeID, "id", "i", "", "Node ID, randomly generated if not set")
 	flag.StringVarP(&raftDir, "dir", "d", "", "Raft directory, ./$(nodeID) if not set")
+	flag.StringVarP(&persistDir, "persistDir", "p", "raft", "Key-value persist directory per node")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
 		flag.PrintDefaults()
@@ -39,7 +41,8 @@ func init() {
 func main() {
 	flag.Parse()
 
-	kv := store.NewStore(nodeID, raftAddress, raftDir)
+	kv := store.NewStore(nodeID, raftAddress, raftDir, persistDir)
+
 	kv.Open(joinHttpAddress == "")
 
 	h := httpd.NewService(listenAddress, kv)
@@ -51,5 +54,6 @@ func main() {
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
 	log.Println("raftd exiting")
+
 }
 

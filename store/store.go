@@ -22,8 +22,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	"github.com/hashicorp/raft-boltdb"
-	"github.com/boltdb/bolt"
+	raftboltdb "github.com/hashicorp/raft-boltdb"
 )
 
 const (
@@ -53,11 +52,11 @@ type Store struct {
 
 	raft   *raft.Raft // The consensus mechanism
 	logger *log.Logger
-	file   *os.File // persistent store
+	dbserver *server
 }
 
 // NewStore returns a new Store.
-func NewStore(nodeID, raftAddress, raftDir string) *Store {
+func NewStore(nodeID, raftAddress, raftDir string, file string) *Store {
 	if nodeID == "" {
 		nodeID = "node-" + randNodeID(nodeIDLen)
 	}
@@ -66,12 +65,17 @@ func NewStore(nodeID, raftAddress, raftDir string) *Store {
 	}
 	log.Printf("Preparing node-%s with persistent diretory %s, raftAddress %s", nodeID, raftDir, raftAddress)
 	os.MkdirAll(raftDir, 0700)
+	boltDb, err := createNewServer(filepath.Join(raftDir, file))
+	if err != nil {
+		log.Fatalf("failed to create new bolt persistent store: %s", err)
+	}
 	s := &Store{
 		ID:          nodeID,
 		RaftAddress: raftAddress,
 		RaftDir:     raftDir,
 		kv:          make(map[string]string),
 		logger:      log.New(os.Stderr, "[store] ", log.LstdFlags),
+		dbserver:    boltDb,
 	}
 	return s
 }
@@ -143,24 +147,14 @@ func (s *Store) Open(enableSingle bool) {
 
 // Get returns the value for the given key.
 func (s *Store) Get(key string) (string, error) {
-	/*s.mu.Lock()
-	defer s.mu.Unlock()
 
 	log.Printf("Processing Get request %s", key)
-	val, ok := s.kv[key]
-	if !ok {
-		return "", fmt.Errorf("key %s does not exist", key)
-	}*/
-	db, _ := bolt.Open("persist.db", 0600, &bolt.Options{Timeout: 5 * time.Second})
-	defer db.Close()
-	db.View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("TestBucket"))
-		v := b.Get([]byte(key))
-		fmt.Println(string(v))
-		return nil
-	})
+	val, err := s.dbserver.PersistGet(key)
+	if err != nil {
+		log.Printf("Failure in processing key %s %s", key, err)
+	}
 
-	return "", nil
+	return val, nil
 }
 
 // Set sets the value for the given key.
@@ -186,6 +180,7 @@ func (s *Store) Set(key, value string) error {
 	}
 
 	f := s.raft.Apply(b, raftTimeout)
+	s.dbserver.PersistPut([]byte(key), []byte(value))
 	return f.Error()
 }
 

@@ -3,18 +3,10 @@ package store
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/SCPD-Project/RAFT-KV-STORE/raftpb"
+	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 	"io"
-	"log"
-	//"github.com/boltdb/bolt"
-	//"time"
-	//"encoding/gob"
-	//"bytes"
-	//"io/ioutil"
-	"github.com/boltdb/bolt"
-	"time"
 )
 
 type fsm Store
@@ -69,33 +61,7 @@ func (f *fsm) applySet(key, value string) interface{} {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.kv[key] = value
-	go f.WriteToPersistence(key, value)
 	return nil
-}
-
-func (f *fsm) WriteToPersistence(key string, value string) {
-	//b , _ := json.Marshal(f.kv)
-	/*var network bytes.Buffer        // Stand-in for a network connection
-	enc := gob.NewEncoder(&network) // Will write to network.
-	_ = enc.Encode(f.kv)*/
-	db, err := bolt.Open("persist.db", 0600, &bolt.Options{Timeout: 5 * time.Second})
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-	db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists([]byte("TestBucket"))
-		if err != nil {
-			return fmt.Errorf("create bucket: %s", err)
-		}
-		return nil
-	})
-	db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte("TestBucket"))
-		err := b.Put([]byte(key), []byte(value))
-		return err
-	})
-	//ioutil.WriteFile("log.gob", network.Bytes(), 0600)
 }
 
 func (f *fsm) applyDelete(key string) interface{} {
