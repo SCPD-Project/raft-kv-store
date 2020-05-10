@@ -13,6 +13,8 @@ bin/kv -i node-1 -l :11001 -r :12001 -j :11000
 bin/kv -i node-2 -l :11002 -r :12002 -j :11000
 ```
 
+Optional flag '-p' can be used to configure persistence file name. It defaults to "raft" if not configured.
+
 ## Leader:
 ```
 curl localhost:11000/leader
