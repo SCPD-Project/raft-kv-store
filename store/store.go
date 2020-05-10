@@ -10,7 +10,7 @@ package store
 import (
 	//"encoding/json"
 	"fmt"
-	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/SCPD-Project/RAFT-KV-STORE/raftpb"
 	"github.com/golang/protobuf/proto"
 	//"io"
 	"log"
@@ -23,6 +23,7 @@ import (
 
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
+	"github.com/boltdb/bolt"
 )
 
 const (
@@ -142,16 +143,24 @@ func (s *Store) Open(enableSingle bool) {
 
 // Get returns the value for the given key.
 func (s *Store) Get(key string) (string, error) {
-	s.mu.Lock()
+	/*s.mu.Lock()
 	defer s.mu.Unlock()
 
 	log.Printf("Processing Get request %s", key)
 	val, ok := s.kv[key]
 	if !ok {
 		return "", fmt.Errorf("key %s does not exist", key)
-	}
+	}*/
+	db, _ := bolt.Open("persist.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
+	defer db.Close()
+	db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("TestBucket"))
+		v := b.Get([]byte(key))
+		fmt.Println(string(v))
+		return nil
+	})
 
-	return val, nil
+	return "", nil
 }
 
 // Set sets the value for the given key.
