@@ -10,9 +10,9 @@ import (
 	"log"
 	//"github.com/boltdb/bolt"
 	//"time"
-	"encoding/gob"
-	"bytes"
-	"io/ioutil"
+	//"encoding/gob"
+	//"bytes"
+	//"io/ioutil"
 	"github.com/boltdb/bolt"
 	"time"
 )
@@ -78,7 +78,7 @@ func (f *fsm) WriteToPersistence(key string, value string) {
 	/*var network bytes.Buffer        // Stand-in for a network connection
 	enc := gob.NewEncoder(&network) // Will write to network.
 	_ = enc.Encode(f.kv)*/
-	db, err := bolt.Open("persist.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, err := bolt.Open("persist.db", 0600, &bolt.Options{Timeout: 5 * time.Second})
 	if err != nil {
 		log.Fatal(err)
 	}

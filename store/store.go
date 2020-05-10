@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/raft"
-	raftboltdb "github.com/hashicorp/raft-boltdb"
+	"github.com/hashicorp/raft-boltdb"
 	"github.com/boltdb/bolt"
 )
 
@@ -151,7 +151,7 @@ func (s *Store) Get(key string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("key %s does not exist", key)
 	}*/
-	db, _ := bolt.Open("persist.db", 0600, &bolt.Options{Timeout: 1 * time.Second})
+	db, _ := bolt.Open("persist.db", 0600, &bolt.Options{Timeout: 5 * time.Second})
 	defer db.Close()
 	db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte("TestBucket"))
