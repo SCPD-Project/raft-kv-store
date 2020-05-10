@@ -10,7 +10,7 @@ package store
 import (
 	//"encoding/json"
 	"fmt"
-	"github.com/SCPD-Project/RAFT-KV-STORE/raftpb"
+	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/golang/protobuf/proto"
 	//"io"
 	"log"

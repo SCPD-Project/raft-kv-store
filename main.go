@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	httpd "github.com/SCPD-Project/RAFT-KV-STORE/http"
-	"github.com/SCPD-Project/RAFT-KV-STORE/store"
+	httpd "github.com/RAFT-KV-STORE/http"
+	"github.com/RAFT-KV-STORE/store"
 	flag "github.com/spf13/pflag"
 	"log"
 	"os"
