@@ -204,6 +204,7 @@ func (s *Store) Delete(key string) error {
 	}
 
 	f := s.raft.Apply(b, raftTimeout)
+	s.dbserver.PersistDelete(key)
 	return f.Error()
 }
 

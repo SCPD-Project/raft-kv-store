@@ -47,3 +47,15 @@ func (s *server) PersistGet(key string) (ct string, err error) {
 	})
 	return
 }
+
+func (s *server) PersistDelete(key string) (err error) {
+	s.db.View(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte("Cs244bBucket"))
+		err := b.Delete([]byte(key))
+		if err != nil {
+			return fmt.Errorf("delete key failed: %s", err)
+		}
+		return nil
+	})
+	return
+}
