@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package raftpb;
+option go_package = "raftpb";
+
+message Command {
+    string method = 1;
+    string key = 2;
+    string value = 3;
+}
+
+message RaftCommand {
+    repeated Command commands = 1;
+}
+
+message JoinMsg {
+    string RaftAddress = 1;
+    string ID = 2;
+}

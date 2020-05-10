@@ -1,10 +1,10 @@
 # RAFT-KV-Store
 
 ```
-go build -o kv
-./kv -id node0 ~/node-0
-./kv -id node1 -haddr :11001 -raddr :12001 -join :11000 ~/node-1
-./kv -id node2 -haddr :11002 -raddr :12002 -join :11000 ~/node-2
+go build -o bin/kv
+bin/kv -i node-0
+bin/kv -i node-1 -l :11001 -r :12001 -j :11000
+bin/kv -i node-2 -l :11002 -r :12002 -j :11000
 
 Leader:
 curl localhost:11000/leader
