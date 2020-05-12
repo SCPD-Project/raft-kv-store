@@ -61,13 +61,16 @@ func (f *fsm) applySet(key, value string) interface{} {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.kv[key] = value
+	f.kvdb.Set(key, value) 	// TODO: Replace with periodic batch snapshot
 	return nil
 }
 
 func (f *fsm) applyDelete(key string) interface{} {
+	// TODO: Replace with periodic batch snapshot
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.kv, key)
+	f.kvdb.Delete(key)
 	return nil
 }
 
@@ -87,7 +90,7 @@ func (f *fsm) applyTransaction(ops []*raftpb.Command) interface{} {
 }
 
 type fsmSnapshot struct {
-	store map[string]string
+	store  map[string]string
 }
 
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {

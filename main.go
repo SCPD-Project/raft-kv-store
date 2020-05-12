@@ -31,7 +31,7 @@ func init() {
 	flag.StringVarP(&joinHttpAddress, "join", "j", "", "Set joining HTTP address, if any")
 	flag.StringVarP(&nodeID, "id", "i", "", "Node ID, randomly generated if not set")
 	flag.StringVarP(&raftDir, "dir", "d", "", "Raft directory, ./$(nodeID) if not set")
-	flag.StringVarP(&persistDir, "persistDir", "p", "raft", "Key-value persist directory per node")
+	flag.StringVarP(&persistDir, "persistDir", "p", "raft", "Key-value persist directory")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
 		flag.PrintDefaults()

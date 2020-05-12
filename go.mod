@@ -3,6 +3,7 @@ module github.com/RAFT-KV-STORE
 go 1.14
 
 require (
+	github.com/boltdb/bolt v1.3.1
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.3
 	github.com/hashicorp/raft v1.1.2

@@ -32,6 +32,7 @@ const (
 
 	SET = "set"
 	DELETE = "delete"
+	PersistentBucketName = "Cs244bRaft"
 )
 
 //type RaftCommand struct {
@@ -52,11 +53,11 @@ type Store struct {
 
 	raft   *raft.Raft // The consensus mechanism
 	logger *log.Logger
-	dbserver *server
+	kvdb   *kvDB // persistent store
 }
 
 // NewStore returns a new Store.
-func NewStore(nodeID, raftAddress, raftDir string, file string) *Store {
+func NewStore(nodeID, raftAddress, raftDir string, persistFile string) *Store {
 	if nodeID == "" {
 		nodeID = "node-" + randNodeID(nodeIDLen)
 	}
@@ -65,17 +66,14 @@ func NewStore(nodeID, raftAddress, raftDir string, file string) *Store {
 	}
 	log.Printf("Preparing node-%s with persistent diretory %s, raftAddress %s", nodeID, raftDir, raftAddress)
 	os.MkdirAll(raftDir, 0700)
-	boltDb, err := createNewServer(filepath.Join(raftDir, file))
-	if err != nil {
-		log.Fatalf("failed to create new bolt persistent store: %s", err)
-	}
+	persistentStore := NewDBConn(nodeID + persistFile)
 	s := &Store{
 		ID:          nodeID,
 		RaftAddress: raftAddress,
 		RaftDir:     raftDir,
 		kv:          make(map[string]string),
 		logger:      log.New(os.Stderr, "[store] ", log.LstdFlags),
-		dbserver:    boltDb,
+		kvdb: 		 persistentStore,
 	}
 	return s
 }
@@ -147,11 +145,13 @@ func (s *Store) Open(enableSingle bool) {
 
 // Get returns the value for the given key.
 func (s *Store) Get(key string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	log.Printf("Processing Get request %s", key)
-	val, err := s.dbserver.PersistGet(key)
-	if err != nil {
-		log.Printf("Failure in processing key %s %s", key, err)
+	// TODO: Replace with snapshot/faster in-memory get
+	val, err := s.kvdb.Get(key); if err != nil {
+		log.Printf("Error %s looking up key: %s", err, key)
 	}
 
 	return val, nil
@@ -180,7 +180,6 @@ func (s *Store) Set(key, value string) error {
 	}
 
 	f := s.raft.Apply(b, raftTimeout)
-	s.dbserver.PersistPut([]byte(key), []byte(value))
 	return f.Error()
 }
 
@@ -204,7 +203,6 @@ func (s *Store) Delete(key string) error {
 	}
 
 	f := s.raft.Apply(b, raftTimeout)
-	s.dbserver.PersistDelete(key)
 	return f.Error()
 }
 
