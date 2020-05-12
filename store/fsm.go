@@ -90,7 +90,7 @@ func (f *fsm) applyTransaction(ops []*raftpb.Command) interface{} {
 }
 
 type fsmSnapshot struct {
-	store  map[string]string
+	store map[string]string
 }
 
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
