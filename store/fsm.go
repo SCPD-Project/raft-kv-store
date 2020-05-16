@@ -3,10 +3,11 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+
 	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
-	"io"
 )
 
 type fsm Store

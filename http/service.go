@@ -5,20 +5,15 @@ package http
 import (
 	"bytes"
 	"fmt"
-	"github.com/RAFT-KV-STORE/raftpb"
-	"github.com/RAFT-KV-STORE/store"
-	"github.com/gogo/protobuf/proto"
 	"log"
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/RAFT-KV-STORE/store"
+	"github.com/gogo/protobuf/proto"
 )
-
-//// TransactionOps ...
-//type TransactionOps struct {
-//	Commands []store.Ops `json:"Commands"`
-//}
-
 
 // Service provides HTTP service.
 type Service struct {

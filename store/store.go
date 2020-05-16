@@ -8,11 +8,7 @@
 package store
 
 import (
-	//"encoding/json"
 	"fmt"
-	"github.com/RAFT-KV-STORE/raftpb"
-	"github.com/golang/protobuf/proto"
-	//"io"
 	"log"
 	"math/rand"
 	"net"
@@ -21,6 +17,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 	raftboltdb "github.com/hashicorp/raft-boltdb"
 )

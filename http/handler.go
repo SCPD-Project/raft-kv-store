@@ -3,14 +3,15 @@ package http
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/RAFT-KV-STORE/raftpb"
-	"github.com/golang/protobuf/proto"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"strings"
+
+	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/golang/protobuf/proto"
 )
 
 const (
