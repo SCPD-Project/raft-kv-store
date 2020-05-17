@@ -17,4 +17,3 @@ message JoinMsg {
     string RaftAddress = 1;
     string ID = 2;
 }
-
