@@ -14,11 +14,15 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
-const (
-	GET = "GET"
-	POST = "POST"
-	DELETE = "DELETE"
-)
+type SetJSON map[string]string
+type TxnCommand struct {
+	Command string `json:"Command"`
+	Key     string `json:"Key"`
+	Value   string `json:"Value"`
+}
+type TxnJSON struct {
+	Commands []TxnCommand
+}
 
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	msg, err := ioutil.ReadAll(r.Body)
@@ -50,55 +54,59 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		return parts[2]
 	}
-
+	var msg string
 	switch r.Method {
-	case GET:
+	case http.MethodGet:
 		key := getKey(r.URL.Path)
 		if key == "" {
 			w.WriteHeader(http.StatusBadRequest)
-		}
-		val, err := s.store.Get(key)
-		if err != nil {
-			io.WriteString(w, err.Error() + "\n")
+			msg = "key is missing"
+		} else if val, err := s.store.Get(key); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			msg = err.Error()
+		} else {
+			w.WriteHeader(http.StatusOK)
+			msg = fmt.Sprintf("Key=%s, Value=%s", key, val)
 		}
-
-		io.WriteString(w, fmt.Sprintf("Key: %s, Value: %s\n", key, val))
-		w.WriteHeader(http.StatusAccepted)
-
-	case POST:
-		// Read the value from the POST body.
-		m := map[string]string{}
+		io.WriteString(w, msg)
+	case http.MethodPost:
+		var m SetJSON
 		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		for k, v := range m {
-			if err := s.store.Set(k, v); err != nil {
-				log.Printf("Unable to set :%s", err)
+			msg = fmt.Sprintf("failed to parse %v", r.Body)
+		} else {
+			if len(m) != 1 {
 				w.WriteHeader(http.StatusInternalServerError)
-				return
+				msg = fmt.Sprintf("Unable to set: %s has len > 1", m)
+			} else {
+				var k, v string
+				for k, v = range m{}
+				if err := s.store.Set(k, v); err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					msg = fmt.Sprintf("Unable to set: %s", err.Error())
+				} else {
+					w.WriteHeader(http.StatusOK)
+				}
 			}
 		}
-		w.WriteHeader(http.StatusAccepted)
-
-	case DELETE:
+		io.WriteString(w, msg)
+	case http.MethodDelete:
 		key := getKey(r.URL.Path)
 		if key == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		if err := s.store.Delete(key); err != nil {
-			log.Print(err)
+			msg = "key is missing"
+		} else if err := s.store.Delete(key); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			return
+			msg = err.Error()
+		} else {
+			w.WriteHeader(http.StatusOK)
 		}
-		s.store.Delete(key)
-		w.WriteHeader(http.StatusAccepted)
-
+		io.WriteString(w, msg)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+	if msg != "" {
+		log.Println(msg)
 	}
 	return
 }
@@ -113,23 +121,15 @@ func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 	// ...so we convert it to a string by passing it through
 	// a buffer first. A 'costly' but useful process.
-	var cmds  struct {
-			Commands []struct {
-				Command string `json:"Command"`
-				Key     string `json:"Key"`
-				Value   string `json:"Value"`
-			}
-	}
+	var cmds TxnJSON
 	if err := json.NewDecoder(r.Body).Decode(&cmds); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
-	if r.Method != POST {
+	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-
 	var raftCmds []*raftpb.Command
 	for _, cmd := range cmds.Commands {
 		raftCmds = append(raftCmds, &raftpb.Command{Method: cmd.Command, Key: cmd.Key, Value: cmd.Value})
@@ -141,8 +141,7 @@ func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-
-	w.WriteHeader(http.StatusAccepted)
+	w.WriteHeader(http.StatusOK)
 
 }
 

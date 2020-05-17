@@ -27,14 +27,7 @@ const (
 	retainSnapshotCount = 2
 	raftTimeout         = 10 * time.Second
 	nodeIDLen           = 5
-
-	SET = "set"
-	DELETE = "delete"
 )
-
-//type RaftCommand struct {
-//	Ops []Ops `json:"ops,omitempty"`
-//}
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.
 type Store struct {
@@ -146,7 +139,7 @@ func (s *Store) Get(key string) (string, error) {
 	log.Printf("Processing Get request %s", key)
 	val, ok := s.kv[key]
 	if !ok {
-		return "", fmt.Errorf("key %s does not exist", key)
+		return "", fmt.Errorf("Key=%s does not exist", key)
 	}
 
 	return val, nil
@@ -155,14 +148,14 @@ func (s *Store) Get(key string) (string, error) {
 // Set sets the value for the given key.
 func (s *Store) Set(key, value string) error {
 	if s.raft.State() != raft.Leader {
-		return fmt.Errorf("not leader")
+		return raft.ErrNotLeader
 	}
 
 	log.Printf("Processing Set request: Key=%s Value=%s", key, value)
 	c := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{
-				Method: SET,
+				Method: raftpb.SET,
 				Key:    key,
 				Value:  value,
 			},
@@ -181,12 +174,16 @@ func (s *Store) Set(key, value string) error {
 // Delete deletes the given key.
 func (s *Store) Delete(key string) error {
 	if s.raft.State() != raft.Leader {
-		return fmt.Errorf("not leader")
+		return raft.ErrNotLeader
+	}
+	log.Printf("Processing Delete request: Key=%s", key)
+	if _, err := s.Get(key); err != nil {
+		return err
 	}
 	c := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{
-				Method: DELETE,
+				Method: raftpb.DEL,
 				Key:    key,
 			},
 		},
@@ -204,8 +201,7 @@ func (s *Store) Delete(key string) error {
 // Transaction atomically executes the transaction .
 func (s *Store) Transaction(ops []*raftpb.Command) error {
 	if s.raft.State() != raft.Leader {
-		log.Print("not leader")
-		return fmt.Errorf("not leader")
+		return raft.ErrNotLeader
 	}
 
 	if s.transactionInProgress {

@@ -21,9 +21,9 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	if len(raftCommand.Commands) == 1 {
 		command := raftCommand.Commands[0]
 		switch command.Method {
-		case SET:
+		case raftpb.SET:
 			return f.applySet(command.Key, command.Value)
-		case DELETE:
+		case raftpb.DEL:
 			return f.applyDelete(command.Key)
 		default:
 			panic(fmt.Sprintf("unrecognized command: %+v", command))
@@ -78,9 +78,9 @@ func (f *fsm) applyTransaction(ops []*raftpb.Command) interface{} {
 	defer f.mu.Unlock()
 	for _, command := range ops {
 		switch command.Method {
-		case SET:
+		case raftpb.SET:
 			f.kv[command.Key] = command.Value
-		case DELETE:
+		case raftpb.DEL:
 			delete(f.kv, command.Key)
 		}
 	}
