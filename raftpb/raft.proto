@@ -18,4 +18,3 @@ message JoinMsg {
     string ID = 2;
 }
 
-
