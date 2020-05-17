@@ -36,6 +36,7 @@ Client commands:
    put class cs244b
    put univ stanford
    del class
+   end
    ```
 - `exit`: exit client from server
 
