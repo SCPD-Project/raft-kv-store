@@ -33,7 +33,3 @@ func main() {
 	signal.Notify(c.Terminate, os.Interrupt)
 	<-c.Terminate
 }
-
-
-
-
