@@ -16,9 +16,9 @@ import (
 
 type SetJSON map[string]string
 type TxnCommand struct {
-	Command string `json:"Command"`
-	Key     string `json:"Key"`
-	Value   string `json:"Value"`
+	Command string `json:"command"`
+	Key     string `json:"key"`
+	Value   string `json:"value"`
 }
 type TxnJSON struct {
 	Commands []TxnCommand

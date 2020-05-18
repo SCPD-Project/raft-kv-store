@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -17,6 +18,10 @@ import (
 
 	httpd "github.com/RAFT-KV-STORE/http"
 	"github.com/RAFT-KV-STORE/raftpb"
+)
+
+var(
+	CmdRegex = regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)\n`)
 )
 
 func addURLScheme(s string) string{
@@ -61,72 +66,64 @@ func (c *raftKVClient) readString() []string {
 	}
 	cmdStr=strings. TrimSuffix(cmdStr, "\n")
 	// To gather quotes
-	cmdArr = regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)\n`).FindAllString(cmdStr, -1)
+	cmdArr = CmdRegex.FindAllString(cmdStr, -1)
 	for i := range cmdArr {
 		cmdArr[i] = strings.Trim(cmdArr[i], "'\"")
 	}
 	return cmdArr
 }
 
-func (c *raftKVClient) validGet(cmdArr []string) bool {
+func (c *raftKVClient) validGet(cmdArr []string) error {
 	if len(cmdArr) != 2 {
-		fmt.Println("Invalid get command. Correct syntax: get [key]")
-		return false
+		return errors.New("Invalid get command. Correct syntax: get [key]")
 	}
-	return true
+	return nil
 }
 
-func (c *raftKVClient) validSet(cmdArr []string) bool {
+func (c *raftKVClient) validSet(cmdArr []string) error {
 	if len(cmdArr) != 3 {
-		fmt.Println("Invalid set command. Correct syntax: set [key] [value]")
-		return false
+		return errors.New("Invalid set command. Correct syntax: set [key] [value]")
 	}
-	return true
+	return nil
 }
 
-func (c *raftKVClient) validDel(cmdArr []string) bool {
+func (c *raftKVClient) validDel(cmdArr []string) error {
 	if len(cmdArr) != 2 {
-		fmt.Println("Invalid delete command. Correct syntax: del [key]")
-		return false
+		return errors.New("Invalid delete command. Correct syntax: del [key]")
 	}
-	return true
+	return nil
 }
 
-func (c *raftKVClient) validTxn(cmdArr []string) bool {
+func (c *raftKVClient) validTxn(cmdArr []string) error {
 	if c.inTxn {
-		fmt.Println("Already in transaction")
-		return false
+		return errors.New("Already in transaction")
 	}
 	if len(cmdArr) != 1 {
-		fmt.Println("Invalid transaction command. Correct syntax: txn")
-		return false
+		return errors.New("Invalid transaction command. Correct syntax: txn")
 	}
-	return true
+	return nil
 }
 
-func (c *raftKVClient) validEndTxn(cmdArr []string) bool {
+func (c *raftKVClient) validEndTxn(cmdArr []string) error {
 	if !c.inTxn {
-		fmt.Println("Not in transaction")
-		return false
+		return errors.New("Not in transaction")
 	}
 	if len(cmdArr) != 1 {
-		fmt.Println("Invalid end transaction command. Correct syntax: end")
-		return false
+		return errors.New("Invalid end transaction command. Correct syntax: end")
 	}
-	return true
+	return nil
 }
 
-func (c *raftKVClient) validExit(cmdArr []string) bool {
+func (c *raftKVClient) validExit(cmdArr []string) error {
 	if len(cmdArr) != 1 {
-		fmt.Println("Invalid exit command. Correct syntax: exit")
-		return false
+		return errors.New("Invalid exit command. Correct syntax: exit")
 	}
-	return true
+	return nil
 }
 
-func (c *raftKVClient) validCmd(cmdArr []string) bool {
+func (c *raftKVClient) validCmd(cmdArr []string) error {
 	if len(cmdArr) == 0 {
-		return false
+		return errors.New("")
 	}
 	switch cmdArr[0] {
 	case raftpb.GET:
@@ -142,8 +139,7 @@ func (c *raftKVClient) validCmd(cmdArr []string) bool {
 	case raftpb.EXIT:
 		return c.validExit(cmdArr)
 	default:
-		fmt.Println("Command not recognized.")
-		return false
+		return errors.New("Command not recognized.")
 	}
 }
 
@@ -180,7 +176,10 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 func (c *raftKVClient) Run() {
 	for {
 		cmdArr := c.readString()
-		if !c.validCmd(cmdArr) {
+		if err := c.validCmd(cmdArr); err != nil{
+			if err.Error() != "" {
+				fmt.Println(err)
+			}
 			continue
 		}
 		if c.inTxn {
@@ -265,7 +264,7 @@ func (c *raftKVClient) Get(key string) error {
 		fmt.Println(string(body))
 		return nil
 	}
-	return fmt.Errorf(string(body))
+	return errors.New(string(body))
 }
 
 func (c *raftKVClient) Set(key string, value string) error{
@@ -287,7 +286,7 @@ func (c *raftKVClient) Set(key string, value string) error{
 		fmt.Println("OK")
 		return nil
 	}
-	return fmt.Errorf(string(body))
+	return errors.New(string(body))
 }
 
 func (c *raftKVClient) Delete(key string) error {
@@ -304,7 +303,7 @@ func (c *raftKVClient) Delete(key string) error {
 		fmt.Println("OK")
 		return nil
 	}
-	return fmt.Errorf(string(body))
+	return errors.New(string(body))
 }
 
 func (c *raftKVClient) Transaction() error{
@@ -324,5 +323,5 @@ func (c *raftKVClient) Transaction() error{
 		fmt.Println("OK")
 		return nil
 	}
-	return fmt.Errorf(string(body))
+	return errors.New(string(body))
 }
