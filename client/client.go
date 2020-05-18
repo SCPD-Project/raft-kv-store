@@ -13,6 +13,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"time"
 
 	httpd "github.com/RAFT-KV-STORE/http"
 	"github.com/RAFT-KV-STORE/raftpb"
@@ -39,7 +40,7 @@ type raftKVClient struct{
 
 func NewRaftKVClient(serverAddr string) *raftKVClient{
 	c := &raftKVClient{
-		client: http.DefaultClient,
+		client: &http.Client{Timeout: 5 * time.Second},
 		serverAddr: addURLScheme(serverAddr),
 		Terminate : make(chan os.Signal, 1),
 		reader: bufio.NewReader(os.Stdin),
