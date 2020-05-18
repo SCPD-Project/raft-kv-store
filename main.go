@@ -51,6 +51,7 @@ func main() {
 			funcName := s[len(s)-1]
 			return fmt.Sprintf(" [%s:%d][%s()]", path.Base(f.File), f.Line, funcName)
 		},
+		CallerFirst: true,
 	})
 
 	logger.SetReportCaller(true)
