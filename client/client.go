@@ -19,7 +19,10 @@ import (
 )
 
 func addURLScheme(s string) string{
-	if !strings.HasPrefix(s, "http://") && !strings.HasPrefix(s, "https://") {
+	if strings.HasPrefix(s, "https://") {
+		s = strings.Replace(s, "https://", "http://", 1)
+		return s
+	} else if !strings.HasPrefix(s, "http://") {
 		return  "http://" + s
 	}
 	return s
@@ -224,6 +227,9 @@ func (c *raftKVClient) newRequest(method, key string, data []byte) (*http.Respon
 		return nil, err
 	}
 	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
 	return resp, nil
 }
 
@@ -238,6 +244,9 @@ func (c *raftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
 		return nil, err
 	}
 	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
 	return resp, nil
 }
 
