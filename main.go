@@ -5,6 +5,7 @@ import (
 	"github.com/RAFT-KV-STORE/store"
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
+	nested "github.com/antonfisher/nested-logrus-formatter"
 	"os"
 	"os/signal"
 )
@@ -37,18 +38,23 @@ func init() {
 
 func main() {
 	flag.Parse()
+	logger := log.New()
+	logger.SetFormatter(&nested.Formatter{
+		HideKeys:    true,
+		FieldsOrder: []string{"component"},
+	})
 
-	kv := store.NewStore(nodeID, raftAddress, raftDir)
+	kv := store.NewStore(logger, nodeID, raftAddress, raftDir)
 	kv.Open(joinHttpAddress == "")
 
-	h := httpd.NewService(listenAddress, kv)
+	h := httpd.NewService(logger, listenAddress, kv)
 	h.Start(joinHttpAddress)
 
-	log.Info("raftd started successfully")
+	logger.WithField("component", "main").Info("raftd started successfully")
 
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
-	log.Info("raftd exiting")
+	logger.WithField("component", "main").Info("raftd exiting")
 }
 
