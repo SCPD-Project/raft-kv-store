@@ -1,11 +1,10 @@
 package main
 
 import (
-	"fmt"
 	httpd "github.com/RAFT-KV-STORE/http"
 	"github.com/RAFT-KV-STORE/store"
-	flag "github.com/spf13/pflag"
 	log "github.com/sirupsen/logrus"
+	flag "github.com/spf13/pflag"
 	"os"
 	"os/signal"
 )
@@ -31,7 +30,7 @@ func init() {
 	flag.StringVarP(&nodeID, "id", "i", "", "Node ID, randomly generated if not set")
 	flag.StringVarP(&raftDir, "dir", "d", "", "Raft directory, ./$(nodeID) if not set")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
+		log.Errorf("Usage: %s [options]\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
