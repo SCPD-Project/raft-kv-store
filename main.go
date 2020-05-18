@@ -5,7 +5,7 @@ import (
 	httpd "github.com/RAFT-KV-STORE/http"
 	"github.com/RAFT-KV-STORE/store"
 	flag "github.com/spf13/pflag"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 )
@@ -45,11 +45,11 @@ func main() {
 	h := httpd.NewService(listenAddress, kv)
 	h.Start(joinHttpAddress)
 
-	log.Println("raftd started successfully")
+	log.Info("raftd started successfully")
 
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
-	log.Println("raftd exiting")
+	log.Info("raftd exiting")
 }
 
