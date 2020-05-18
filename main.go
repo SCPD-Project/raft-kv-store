@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	httpd "github.com/RAFT-KV-STORE/http"
 	"github.com/RAFT-KV-STORE/store"
 	log "github.com/sirupsen/logrus"
@@ -8,6 +9,9 @@ import (
 	nested "github.com/antonfisher/nested-logrus-formatter"
 	"os"
 	"os/signal"
+	"path"
+	"runtime"
+	"strings"
 )
 
 const (
@@ -42,7 +46,14 @@ func main() {
 	logger.SetFormatter(&nested.Formatter{
 		HideKeys:    true,
 		FieldsOrder: []string{"component"},
+		CustomCallerFormatter: func(f *runtime.Frame) string {
+			s := strings.Split(f.Function, ".")
+			funcName := s[len(s)-1]
+			return fmt.Sprintf(" [%s:%d][%s()]", path.Base(f.File), f.Line, funcName)
+		},
 	})
+
+	logger.SetReportCaller(true)
 
 	kv := store.NewStore(logger, nodeID, raftAddress, raftDir)
 	kv.Open(joinHttpAddress == "")
