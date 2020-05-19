@@ -24,6 +24,7 @@ type TxnJSON struct {
 }
 
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
+
 	msg, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		s.log.Fatal("Error when reading join data", err)
@@ -34,18 +35,26 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		s.log.Fatal("Error when unmarshal join data", err)
 	}
 
-	if joinMsg.RaftAddress == "" || joinMsg.ID == ""{
+	if joinMsg.RaftAddress == "" || joinMsg.ID == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	if err := s.store.Join(joinMsg.ID, joinMsg.RaftAddress); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	if s.store != nil {
+		if err := s.store.Join(joinMsg.ID, joinMsg.RaftAddress); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := s.coordinator.Join(joinMsg.ID, joinMsg.RaftAddress); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
 func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
+
 	getKey := func(path string) string {
 		parts := strings.SplitN(path, "/", 3)
 		if len(parts) != 3 {
@@ -59,15 +68,19 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		key := getKey(r.URL.Path)
 		if key == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			msg = "key is missing"
-		} else if val, err := s.store.Get(key); err != nil {
+		}
+		val, err := s.coordinator.Get(key)
+		if err != nil {
+			io.WriteString(w, err.Error()+"\n")
 			w.WriteHeader(http.StatusInternalServerError)
 			msg = err.Error()
 		} else {
 			w.WriteHeader(http.StatusOK)
 			msg = fmt.Sprintf("Key=%s, Value=%s", key, val)
 		}
-		io.WriteString(w, msg)
+
+		io.WriteString(w, fmt.Sprintf("Key: %s, Value: %s\n", key, val))
+
 	case http.MethodPost:
 		var m SetJSON
 		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
@@ -79,8 +92,9 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 				msg = fmt.Sprintf("Unable to set: %s has len > 1", m)
 			} else {
 				var k, v string
-				for k, v = range m{}
-				if err := s.store.Set(k, v); err != nil {
+				for k, v = range m {
+				}
+				if err := s.coordinator.Set(k, v); err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					msg = fmt.Sprintf("Unable to set: %s", err.Error())
 				} else {
@@ -89,12 +103,13 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		io.WriteString(w, msg)
+
 	case http.MethodDelete:
 		key := getKey(r.URL.Path)
 		if key == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			msg = "key is missing"
-		} else if err := s.store.Delete(key); err != nil {
+		} else if err := s.coordinator.Delete(key); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			msg = err.Error()
 		} else {
@@ -111,9 +126,16 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request) {
-	s.log.Info("Handling request for leader")
-	io.WriteString(w, s.store.Leader())
-	w.WriteHeader(http.StatusAccepted)
+	// log.Print("Handling request for leader")
+
+	// leader, err := s.coordinator.Leader()
+	// if err != nil {
+	// 	io.WriteString(w, err.Error()+"\n")
+	// 	w.WriteHeader(http.StatusInternalServerError)
+	// 	return
+	// }
+	// io.WriteString(w, leader)
+
 }
 
 // handleTransaction
@@ -133,8 +155,8 @@ func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 	for _, cmd := range cmds.Commands {
 		raftCmds = append(raftCmds, &raftpb.Command{Method: cmd.Command, Key: cmd.Key, Value: cmd.Value})
 	}
-	s.log.Info(raftCmds)
-	err := s.store.Transaction(raftCmds)
+
+	_, err := s.coordinator.Transaction(raftCmds)
 	if err != nil {
 		s.log.Error(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -148,4 +170,3 @@ func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()
 }
-

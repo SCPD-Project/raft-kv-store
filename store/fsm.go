@@ -25,6 +25,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 			return f.applySet(command.Key, command.Value)
 		case raftpb.DEL:
 			return f.applyDelete(command.Key)
+
 		default:
 			panic(fmt.Sprintf("unrecognized command: %+v", command))
 		}
