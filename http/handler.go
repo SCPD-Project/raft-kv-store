@@ -105,7 +105,7 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 	if msg != "" {
-		log.Println(msg)
+		s.log.Info(msg)
 	}
 	return
 }
