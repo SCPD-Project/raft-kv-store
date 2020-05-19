@@ -42,7 +42,7 @@ type Store struct {
 	t                     sync.Mutex
 
 	raft   *raft.Raft // The consensus mechanism
-	logger *log.Logger
+	log	   *log.Entry
 	file   *os.File // persistent store
 }
 
@@ -54,7 +54,8 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string) *Store {
 	if raftDir == "" {
 		raftDir = fmt.Sprintf("./%s", nodeID)
 	}
-	logger.WithField("component", "store").Infof("Preparing node-%s with persistent diretory %s, raftAddress %s", nodeID, raftDir, raftAddress)
+	l := logger.WithField("component", "store")
+	l.Infof("Preparing node-%s with persistent diretory %s, raftAddress %s", nodeID, raftDir, raftAddress)
 	os.MkdirAll(raftDir, 0700)
 
 	s := &Store{
@@ -62,7 +63,7 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string) *Store {
 		RaftAddress: raftAddress,
 		RaftDir:     raftDir,
 		kv:          make(map[string]string),
-		logger:      logger,
+		log:      l,
 	}
 	return s
 }
@@ -90,15 +91,15 @@ func (s *Store) Open(enableSingle bool) {
 	var err error
 	var snapshots *raft.FileSnapshotStore
 	if TCPAddress, err = net.ResolveTCPAddr("tcp", s.RaftAddress); err != nil {
-		s.logger.WithField("component", "store").Fatalf("failed to resolve TCP address %s: %s", s.RaftAddress, err)
+		s.log.Fatalf("failed to resolve TCP address %s: %s", s.RaftAddress, err)
 	}
 	if transport, err = raft.NewTCPTransport(s.RaftAddress, TCPAddress, 3, 10*time.Second, os.Stderr); err != nil {
-		s.logger.WithField("component", "store").Fatalf("failed to make TCP transport on %s: %s", s.RaftAddress, err.Error())
+		s.log.Fatalf("failed to make TCP transport on %s: %s", s.RaftAddress, err.Error())
 	}
 
 	// Create the snapshot store. This allows the Raft to truncate the log.
 	if snapshots, err = raft.NewFileSnapshotStore(s.RaftDir, retainSnapshotCount, os.Stderr); err != nil {
-		s.logger.WithField("component", "store").Fatalf("failed to create snapshot store at %s: %s", s.RaftDir, err.Error())
+		s.log.Fatalf("failed to create snapshot store at %s: %s", s.RaftDir, err.Error())
 	}
 
 	// Create the log store and stable store.
@@ -107,7 +108,7 @@ func (s *Store) Open(enableSingle bool) {
 
 	boltDB, err := raftboltdb.NewBoltStore(filepath.Join(s.RaftDir, "raft.db"))
 	if err != nil {
-		s.logger.WithField("component", "store").Fatalf("failed to create new bolt store: %s", err)
+		s.log.Fatalf("failed to create new bolt store: %s", err)
 	}
 	logStore = boltDB
 	stableStore = boltDB
@@ -115,7 +116,7 @@ func (s *Store) Open(enableSingle bool) {
 	// Instantiate the Raft systems.
 	ra, err := raft.NewRaft(config, (*fsm)(s), logStore, stableStore, snapshots, transport)
 	if err != nil {
-		s.logger.WithField("component", "store").Fatalf("failed to create new raft: %s", err)
+		s.log.Fatalf("failed to create new raft: %s", err)
 	}
 	s.raft = ra
 
@@ -137,7 +138,7 @@ func (s *Store) Get(key string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.logger.WithField("component", "store").Infof("Processing Get request %s", key)
+	s.log.Infof("Processing Get request %s", key)
 	val, ok := s.kv[key]
 	if !ok {
 		return "", fmt.Errorf("Key=%s does not exist", key)
@@ -152,7 +153,7 @@ func (s *Store) Set(key, value string) error {
 		return raft.ErrNotLeader
 	}
 
-	s.logger.WithField("component", "store").Infof("Processing Set request: Key=%s Value=%s", key, value)
+	s.log.Infof("Processing Set request: Key=%s Value=%s", key, value)
 	c := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{
@@ -240,11 +241,11 @@ func (s *Store) Leader() string {
 // Join joins a node, identified by nodeID and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
 func (s *Store) Join(nodeID, addr string) error {
-	s.logger.Printf("received join request for remote node %s at %s", nodeID, addr)
+	s.log.Infof("received join request for remote node %s at %s", nodeID, addr)
 
 	configFuture := s.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
-		s.logger.WithField("component", "store").Infof("failed to get raft configuration: %v", err)
+		s.log.Infof("failed to get raft configuration: %v", err)
 		return err
 	}
 
@@ -255,7 +256,7 @@ func (s *Store) Join(nodeID, addr string) error {
 			// However if *both* the ID and the address are the same, then nothing -- not even
 			// a join operation -- is needed.
 			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(nodeID) {
-				s.logger.WithField("component", "store").Infof("node %s at %s already member of cluster, ignoring join request", nodeID, addr)
+				s.log.Infof("node %s at %s already member of cluster, ignoring join request", nodeID, addr)
 				return nil
 			}
 
@@ -270,6 +271,6 @@ func (s *Store) Join(nodeID, addr string) error {
 	if f.Error() != nil {
 		return f.Error()
 	}
-	s.logger.WithField("component", "store").Infof("node %s at %s joined successfully", nodeID, addr)
+	s.log.Infof("node %s at %s joined successfully", nodeID, addr)
 	return nil
 }
