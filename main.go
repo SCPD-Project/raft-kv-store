@@ -4,10 +4,14 @@ import (
 	"fmt"
 	httpd "github.com/RAFT-KV-STORE/http"
 	"github.com/RAFT-KV-STORE/store"
+	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
-	"log"
+	nested "github.com/antonfisher/nested-logrus-formatter"
 	"os"
 	"os/signal"
+	"path"
+	"runtime"
+	"strings"
 )
 
 const (
@@ -31,25 +35,38 @@ func init() {
 	flag.StringVarP(&nodeID, "id", "i", "", "Node ID, randomly generated if not set")
 	flag.StringVarP(&raftDir, "dir", "d", "", "Raft directory, ./$(nodeID) if not set")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
+		log.Errorf("Usage: %s [options]\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 }
 
 func main() {
 	flag.Parse()
+	logger := log.New()
+	logger.SetFormatter(&nested.Formatter{
+		HideKeys:    true,
+		FieldsOrder: []string{"component"},
+		CustomCallerFormatter: func(f *runtime.Frame) string {
+			s := strings.Split(f.Function, ".")
+			funcName := s[len(s)-1]
+			return fmt.Sprintf(" [%s:%d][%s()]", path.Base(f.File), f.Line, funcName)
+		},
+		CallerFirst: true,
+	})
 
-	kv := store.NewStore(nodeID, raftAddress, raftDir)
+	logger.SetReportCaller(true)
+
+	kv := store.NewStore(logger, nodeID, raftAddress, raftDir)
 	kv.Open(joinHttpAddress == "")
 
-	h := httpd.NewService(listenAddress, kv)
+	h := httpd.NewService(logger, listenAddress, kv)
 	h.Start(joinHttpAddress)
 
-	log.Println("raftd started successfully")
+	logger.WithField("component", "main").Info("raftd started successfully")
 
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
-	log.Println("raftd exiting")
+	logger.WithField("component", "main").Info("raftd exiting")
 }
 

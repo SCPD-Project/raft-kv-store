@@ -5,7 +5,7 @@ package http
 import (
 	"bytes"
 	"fmt"
-	"log"
+	log "github.com/sirupsen/logrus"
 	"net"
 	"net/http"
 	"strings"
@@ -20,13 +20,16 @@ type Service struct {
 	addr string
 	ln   net.Listener
 	store *store.Store
+	log *log.Entry
 }
 
 // New returns an uninitialized HTTP service.
-func NewService(addr string, store *store.Store) *Service {
+func NewService(logger *log.Logger, addr string, store *store.Store) *Service {
+	l := logger.WithField("component", "http")
 	return &Service{
 		addr:  addr,
 		store: store,
+		log: l,
 	}
 }
 
@@ -38,7 +41,7 @@ func (s *Service) Start(joinHttpAddress string) {
 
 	ln, err := net.Listen("tcp", s.addr)
 	if err != nil {
-		log.Fatalf("failed to start HTTP service: %s", err.Error())
+		s.log.Fatalf("failed to start HTTP service: %s", err.Error())
 	}
 	s.ln = ln
 
@@ -47,7 +50,7 @@ func (s *Service) Start(joinHttpAddress string) {
 	go func() {
 		err := server.Serve(s.ln)
 		if err != nil {
-			log.Fatalf("HTTP serve error: %s", err)
+			s.log.Fatalf("HTTP serve error: %s", err)
 		}
 	}()
 
@@ -55,11 +58,11 @@ func (s *Service) Start(joinHttpAddress string) {
 		msg := &raftpb.JoinMsg{RaftAddress: s.store.RaftAddress, ID: s.store.ID}
 		b, err := proto.Marshal(msg)
 		if err != nil {
-			log.Fatalf("error when marshaling %+v", msg)
+			s.log.Fatalf("error when marshaling %+v", msg)
 		}
 		resp, err := http.Post(fmt.Sprintf("http://%s/join", joinHttpAddress), "application/protobuf", bytes.NewBuffer(b))
 		if err != nil {
-			log.Fatalf("failed to join %s: %s", joinHttpAddress, err)
+			s.log.Fatalf("failed to join %s: %s", joinHttpAddress, err)
 		}
 		defer resp.Body.Close()
 	}

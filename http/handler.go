@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -27,12 +26,12 @@ type TxnJSON struct {
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	msg, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		log.Fatal("Error when reading join data", err)
+		s.log.Fatal("Error when reading join data", err)
 	}
 
 	var joinMsg raftpb.JoinMsg
 	if err = proto.Unmarshal(msg, &joinMsg); err != nil {
-		log.Fatal("Error when unmarshal join data", err)
+		s.log.Fatal("Error when unmarshal join data", err)
 	}
 
 	if joinMsg.RaftAddress == "" || joinMsg.ID == ""{
@@ -50,7 +49,7 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 	getKey := func(path string) string {
 		parts := strings.SplitN(path, "/", 3)
 		if len(parts) != 3 {
-			log.Fatalf("Error in getting key from %s", r.URL.Path)
+			s.log.Fatalf("Error in getting key from %s", r.URL.Path)
 		}
 		return parts[2]
 	}
@@ -106,13 +105,13 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 	if msg != "" {
-		log.Println(msg)
+		s.log.Info(msg)
 	}
 	return
 }
 
 func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request) {
-	log.Print("Handling request for leader")
+	s.log.Info("Handling request for leader")
 	io.WriteString(w, s.store.Leader())
 	w.WriteHeader(http.StatusAccepted)
 }
@@ -134,10 +133,10 @@ func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 	for _, cmd := range cmds.Commands {
 		raftCmds = append(raftCmds, &raftpb.Command{Method: cmd.Command, Key: cmd.Key, Value: cmd.Value})
 	}
-	log.Print(raftCmds)
+	s.log.Info(raftCmds)
 	err := s.store.Transaction(raftCmds)
 	if err != nil {
-		log.Print(err)
+		s.log.Error(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
