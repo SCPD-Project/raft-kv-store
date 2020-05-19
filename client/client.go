@@ -37,6 +37,7 @@ func addURLScheme(s string) string{
 type raftKVClient struct{
 	client *http.Client
 	serverAddr string
+	// TODO: Add stop API to avoid exposing Terminate channel
 	Terminate chan os.Signal
 	reader *bufio.Reader
 	inTxn bool
