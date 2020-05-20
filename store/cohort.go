@@ -63,7 +63,6 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.
 			return nil
 
 		case LEADER:
-			log.Println("Processing leader request", string(c.s.raft.Leader()))
 
 			if c.s.raft.State() == raft.Leader {
 				*reply = common.RPCResponse{
@@ -157,6 +156,10 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 			// release the locks
 			c.s.transactionInProgress = false
 		}
+		*reply = common.RPCResponse{
+			Status: 0,
+			Value:  common.Committed,
+		}
 
 	case common.Abort:
 		c.m.Lock()
@@ -166,6 +169,10 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 		// this should be set operation on raft
 		c.cState[ops.Txid].MessageType = common.Abort
 		c.s.transactionInProgress = false
+		*reply = common.RPCResponse{
+			Status: 0,
+			Value:  common.Aborted,
+		}
 
 	}
 	return nil

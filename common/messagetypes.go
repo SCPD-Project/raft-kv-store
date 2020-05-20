@@ -10,6 +10,7 @@ const (
 
 	Prepared  = "prepared"
 	Committed = "committed"
+	Aborted   = "Aborted"
 
 	NotPrepared = "NotPrepared"
 	Invalid     = "Invalid"
@@ -22,22 +23,6 @@ const (
 	GET    = "get"
 	LEADER = "leader"
 )
-
-// Message indicates the message format that is exchanged between
-// coordinator and the cohorts
-type Message struct {
-	Txn  *LocalTransaction
-	Type string
-}
-
-// LocalTransaction captures the content of the transaction. The ID (global id) and Cmds.
-// The cmds will contain requests related to the shard. It is the responsibiliy of the
-// coordinator to populate it correctly.
-type LocalTransaction struct {
-	Txid  int
-	Cmds  raftpb.RaftCommand
-	Phase string
-}
 
 // GlobalTransaction captures the info of entire transaction
 type GlobalTransaction struct {
@@ -62,11 +47,7 @@ type ShardOps struct {
 	MessageType string
 }
 
-// RPCResponse is the response from rpc call. The value is mostly
-// used for Get cmds and fetching leader from other cluster.
-// Other commands do not return any value apart
-// from success. We could use an interface type as well, but this is
-// just easier.
+// RPCResponse is the response from rpc call.
 type RPCResponse struct {
 	Status int
 	Value  string

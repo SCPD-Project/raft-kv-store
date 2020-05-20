@@ -2,7 +2,6 @@ package coordinator
 
 import (
 	"fmt"
-	"log"
 	"net/rpc"
 
 	"github.com/RAFT-KV-STORE/common"
@@ -25,7 +24,6 @@ func (c *Coordinator) GetShardID(key string) int {
 // leader.
 func (c *Coordinator) Leader(address string) (string, error) {
 
-	log.Println("Processing Leader request")
 	var response common.RPCResponse
 	cmd := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
@@ -40,13 +38,8 @@ func (c *Coordinator) Leader(address string) (string, error) {
 		return "", err
 	}
 
-	err = client.Call("Cohort.ProcessSimpleCommands", cmd, &response)
-
-	log.Println("Got Value", response.Value, response.Status, err)
-	log.Printf("Got Value struct:%v", response)
-
+	err = client.Call("Cohort.ProcessCommands", cmd, &response)
 	return response.Value, err
-
 }
 
 // FindLeader returns leader address in form (ip:port) and
@@ -68,7 +61,8 @@ func (c *Coordinator) FindLeader(key string) (string, int, error) {
 }
 
 // SendMessageToShard sends prepare message to a shard. The return value
-// indicates if the shard successfully performed the operation.
+// indicates if the shard successfully performed the operation. This returns bool
+// as the caller need not care of the exact error
 func (c *Coordinator) SendMessageToShard(ops *common.ShardOps) bool {
 
 	var response common.RPCResponse
@@ -89,5 +83,5 @@ func (c *Coordinator) SendMessageToShard(ops *common.ShardOps) bool {
 	if err != nil {
 		return false
 	}
-	return response.Value == common.Prepared || response.Value == common.Committed
+	return response.Value == common.Prepared || response.Value == common.Committed || response.Value == common.Aborted
 }

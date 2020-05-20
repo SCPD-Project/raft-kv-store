@@ -106,7 +106,7 @@ func (c *Coordinator) Delete(key string) error {
 // Transaction atomically executes the transaction .
 func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 
-	log.Printf("Processing Transaction")
+	log.Println("Processing Transaction")
 	cmds := &raftpb.RaftCommand{
 		Commands: ops,
 	}
@@ -115,6 +115,7 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	gt := c.createGlobalTransactionObject(txid, cmds)
 	numShards := len(gt.ShardToCommands)
 
+	log.Printf("Starting prepare phase for txid: %s\n", txid)
 	// Prepare Phase
 
 	// Send prepare messages to all the shards involved in
@@ -128,15 +129,31 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	}
 
 	if prepareResponses != numShards {
+		// send abort and report error.
+		// abort will help release the locks
+		// on the shards.
+		for _, shardops := range gt.ShardToCommands {
+			// Relicate via Raft
+			c.cstate[txid].Phase = common.Abort
+			shardops.MessageType = common.Abort
+
+			// best effort
+			_ = c.SendMessageToShard(shardops)
+		}
+		c.cstate[txid] = gt
+
 		return txid, fmt.Errorf("transaction unsuccesfull, try again")
 	}
 
+	log.Printf("[txid: %s] Prepared recieved: %d Prepared Expected: %d", txid, prepareResponses, numShards)
 	// log the prepared phase and replicate it
 	gt.Phase = common.Prepared
 	c.cstate[txid] = gt
 
 	// TODO(imp):if the above replication fails via raft,
-	// abort the transaction
+	// this usually means majority of nodes in the coordinator
+	// cluster are faulty (partition or down). In that case,
+	// retry on error.
 
 	// Commit
 	commitResponses := 0
@@ -155,10 +172,10 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	gt.Phase = common.Committed
 	c.cstate[txid] = gt
 
-	// wait for all acks bro since client should complete replication as
-	// well
+	// wait for all acks since client should complete replication as
+	// well. not required.
 
-	log.Printf("Commit Ack recieved: %d Ack Expected: %d", commitResponses, numShards)
+	log.Printf("[txid :%s] Commit Ack recieved: %d Ack Expected: %d", txid, commitResponses, numShards)
 
 	return txid, nil
 }
