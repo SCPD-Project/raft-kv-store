@@ -1,7 +1,6 @@
 package store
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 
@@ -42,15 +41,15 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	for k, v := range f.kv {
 		o[k] = v
 	}
-	return &fsmSnapshot{store: o}, nil
+
+	return &fsmSnapshot{store: o, kvdb: f.kvdb}, nil
 }
 
 // Restore stores the key-value store to a previous state.
 func (f *fsm) Restore(rc io.ReadCloser) error {
+	fmt.Println(" Snapshot restore ")
 	o := make(map[string]string)
-	if err := json.NewDecoder(rc).Decode(&o); err != nil {
-		return err
-	}
+	f.kvdb.FetchAllKeys(o)
 
 	// Set the state from the snapshot, no lock required according to
 	// Hashicorp docs.
@@ -89,20 +88,14 @@ func (f *fsm) applyTransaction(ops []*raftpb.Command) interface{} {
 
 type fsmSnapshot struct {
 	store map[string]string
+	kvdb  *kvDB
 }
 
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
+	fmt.Println(" Snapshot persist ")
 	err := func() error {
-		// Encode data.
-		b, err := json.Marshal(f.store)
-		if err != nil {
-			return err
-		}
-
-		// Write data to sink.
-		if _, err := sink.Write(b); err != nil {
-			return err
-		}
+		// Persist data.
+		f.kvdb.BatchSet(f.store)
 
 		// Close the sink.
 		return sink.Close()

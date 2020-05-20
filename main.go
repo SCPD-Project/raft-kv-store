@@ -4,13 +4,14 @@ import (
 	"fmt"
 	httpd "github.com/RAFT-KV-STORE/http"
 	"github.com/RAFT-KV-STORE/store"
+	nested "github.com/antonfisher/nested-logrus-formatter"
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
-	nested "github.com/antonfisher/nested-logrus-formatter"
 	"os"
 	"os/signal"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 )
 
@@ -26,6 +27,9 @@ var (
 	joinHttpAddress string
 	raftDir         string
 	nodeID          string
+	snapshotInterval string
+	snapshotThreshold string
+	persistDir      string
 )
 
 func init() {
@@ -34,6 +38,11 @@ func init() {
 	flag.StringVarP(&joinHttpAddress, "join", "j", "", "Set joining HTTP address, if any")
 	flag.StringVarP(&nodeID, "id", "i", "", "Node ID, randomly generated if not set")
 	flag.StringVarP(&raftDir, "dir", "d", "", "Raft directory, ./$(nodeID) if not set")
+	flag.StringVarP(&snapshotInterval, "snapshotinterval", "", "30",
+		"Snapshot interval in seconds, 30 seconds if not set")
+	flag.StringVarP(&snapshotThreshold, "snapshotthreshold", "", "5",
+		"Snapshot threshold, 5 if not set")
+	flag.StringVarP(&persistDir, "persistDir", "p", "raft", "Key-value persist directory")
 	flag.Usage = func() {
 		log.Errorf("Usage: %s [options]\n", os.Args[0])
 		flag.PrintDefaults()
@@ -56,7 +65,21 @@ func main() {
 
 	logger.SetReportCaller(true)
 
-	kv := store.NewStore(logger, nodeID, raftAddress, raftDir)
+	interval, err := strconv.Atoi(snapshotInterval); if err != nil {
+		logger.WithField("component", "main").
+			Fatalf(" Failed to parse snapshotinterval input: %s", err)
+	}
+
+	threshold, err := strconv.Atoi(snapshotThreshold); if err != nil {
+		logger.WithField("component", "main").
+			Fatalf(" Failed to parse snapshotthreshold input: %s", err)
+	}
+
+	persistInputs := store.PersistStateInputs{SnapshotInterval: interval,
+					SnapshotThreshold: threshold,
+					PersistDir: persistDir}
+
+	kv := store.NewStore(logger, nodeID, raftAddress, raftDir, persistInputs)
 	kv.Open(joinHttpAddress == "")
 
 	h := httpd.NewService(logger, listenAddress, kv)
