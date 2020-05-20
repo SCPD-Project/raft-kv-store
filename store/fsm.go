@@ -7,6 +7,7 @@ import (
 	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
+	log "github.com/sirupsen/logrus"
 )
 
 type fsm Store
@@ -42,14 +43,15 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 		o[k] = v
 	}
 
-	return &fsmSnapshot{store: o, kvdb: f.kvdb}, nil
+	return &fsmSnapshot{store: o, persistDBConn: f.persistKvDbConn, bucketName: f.persistBucketName,
+						logger: f.log}, nil
 }
 
 // Restore stores the key-value store to a previous state.
-func (f *fsm) Restore(rc io.ReadCloser) error {
-	fmt.Println(" Snapshot restore ")
+func (f *fsm) Restore(_ io.ReadCloser) error {
+	f.log.Infof(" Snapshot restore from bucket: %s", f.persistBucketName)
 	o := make(map[string]string)
-	f.kvdb.FetchAllKeys(o)
+	o = f.restore()
 
 	// Set the state from the snapshot, no lock required according to
 	// Hashicorp docs.
@@ -88,14 +90,16 @@ func (f *fsm) applyTransaction(ops []*raftpb.Command) interface{} {
 
 type fsmSnapshot struct {
 	store map[string]string
-	kvdb  *kvDB
+	persistDBConn  *persistKvDB
+	bucketName  string
+	logger *log.Entry
 }
 
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {
-	fmt.Println(" Snapshot persist ")
+	f.logger.Infof(" Snapshot persisted to bucket: %s", f.bucketName)
 	err := func() error {
 		// Persist data.
-		f.kvdb.BatchSet(f.store)
+		f.save()
 
 		// Close the sink.
 		return sink.Close()

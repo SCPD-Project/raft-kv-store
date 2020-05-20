@@ -27,14 +27,13 @@ const (
 	retainSnapshotCount = 2
 	raftTimeout         = 10 * time.Second
 	nodeIDLen           = 5
-	PersistentBucketName = "Cs244bRaft"
+	SnapshotPersistFile = "persistedKeyValues.db"
 )
 
-type PersistStateInputs struct {
-	SnapshotInterval int
+var (
 	SnapshotThreshold int
-	PersistDir string
-}
+	SnapshotInterval int
+)
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.
 type Store struct {
@@ -50,14 +49,14 @@ type Store struct {
 
 	raft   *raft.Raft // The consensus mechanism
 	log	   *log.Entry
-	kvdb   *kvDB // persistent store
+	persistBucketName string
+	persistKvDbConn   *persistKvDB // persistent store
 
-	persistInputs PersistStateInputs
 }
 
 // NewStore returns a new Store.
 func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string,
-	          inputs PersistStateInputs) *Store {
+	          bucketName string) *Store {
 	if nodeID == "" {
 		nodeID = "node-" + randNodeID(nodeIDLen)
 	}
@@ -67,7 +66,10 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string,
 	l := logger.WithField("component", "store")
 	l.Infof("Preparing node-%s with persistent diretory %s, raftAddress %s", nodeID, raftDir, raftAddress)
 	os.MkdirAll(raftDir, 0700)
-	persistentStore, err := NewDBConn(nodeID, inputs.PersistDir)
+	if bucketName == "" {
+		bucketName = "bucket-" + nodeID
+	}
+	persistDbConn, err := newDBConn(filepath.Join(raftDir, nodeID + SnapshotPersistFile), bucketName)
 	if err != nil {
 		l.Fatalf(" Failed creating persistent store with err: %s", err)
 	}
@@ -78,8 +80,8 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string,
 		RaftDir:     raftDir,
 		kv:          make(map[string]string),
 		log:      l,
-		kvdb: 		 persistentStore,
-		persistInputs: inputs,
+		persistKvDbConn: persistDbConn,
+		persistBucketName: bucketName,
 	}
 	return s
 }
@@ -100,8 +102,8 @@ func (s *Store) Open(enableSingle bool) {
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()
 	// Override defaults with configured values
-	config.SnapshotThreshold = uint64(s.persistInputs.SnapshotThreshold)
-	config.SnapshotInterval = time.Duration(s.persistInputs.SnapshotInterval) * time.Second
+	config.SnapshotThreshold = uint64(SnapshotThreshold)
+	config.SnapshotInterval = time.Duration(SnapshotInterval) * time.Second
 	config.LocalID = raft.ServerID(s.ID)
 
 	// Setup Raft communication.
