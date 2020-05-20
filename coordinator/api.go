@@ -128,20 +128,23 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 		}
 	}
 
+	log.Printf("[txid %s] prepared sent\n", txid)
+
 	if prepareResponses != numShards {
 		// send abort and report error.
 		// abort will help release the locks
 		// on the shards.
-		for _, shardops := range gt.ShardToCommands {
-			// Relicate via Raft
-			c.cstate[txid].Phase = common.Abort
-			shardops.MessageType = common.Abort
-
-			// best effort
-			_ = c.SendMessageToShard(shardops)
-		}
+		log.Printf("[txid %s] Aborting\n", txid)
+		gt.Phase = common.Abort
+		// replicate via raft
 		c.cstate[txid] = gt
 
+		for _, shardops := range gt.ShardToCommands {
+			shardops.MessageType = common.Abort
+			// best effort
+			_ = c.SendMessageToShard(shardops)
+
+		}
 		return txid, fmt.Errorf("transaction unsuccesfull, try again")
 	}
 

@@ -84,7 +84,6 @@ func (s *Service) Start(joinHttpAddress string) {
 		}
 		defer resp.Body.Close()
 	}
-	fmt.Printf("Varun: server started :%v\n", s)
 }
 
 // Close closes the service.

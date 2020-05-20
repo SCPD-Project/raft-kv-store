@@ -1,13 +1,17 @@
 package coordinator
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/rpc"
 	"os"
+	"sync"
 
 	"github.com/RAFT-KV-STORE/common"
 	"github.com/RAFT-KV-STORE/config"
+	"github.com/RAFT-KV-STORE/raftpb"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/hashicorp/raft"
 )
@@ -22,6 +26,7 @@ type Coordinator struct {
 
 	// coordinator state - This has to be replicated.
 	cstate map[string]*common.GlobalTransaction
+	m      sync.Mutex
 
 	// ShardToPeers need to be populated based on a config.
 	// If time permits, these can be auto-discovered.
@@ -64,4 +69,48 @@ func New(nodeID, raftDir, raftAddress string, enableSingle bool, shardInfo *conf
 	c.raft = ra
 
 	return c, nil
+}
+
+// Replicate replicates put/get/deletes on coordinator's
+// state machine
+func (c *Coordinator) Replicate(key, op string, value *common.GlobalTransaction) error {
+
+	var cmd *raftpb.RaftCommand
+	gt, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("unable to marshal global transaction obj: %s", err)
+	}
+
+	switch op {
+
+	case common.SET:
+		cmd = &raftpb.RaftCommand{
+			Commands: []*raftpb.Command{
+				{
+					Method: common.SET,
+					Key:    key,
+					Value:  string(gt),
+				},
+			},
+		}
+
+	case common.DELETE:
+		cmd = &raftpb.RaftCommand{
+			Commands: []*raftpb.Command{
+				{
+					Method: common.DELETE,
+					Key:    key,
+				},
+			},
+		}
+	}
+
+	b, err := proto.Marshal(cmd)
+	if err != nil {
+		return err
+	}
+
+	f := c.raft.Apply(b, common.RaftTimeout)
+
+	return f.Error()
 }

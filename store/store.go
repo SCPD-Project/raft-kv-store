@@ -94,39 +94,6 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSin
 	return s, nil
 }
 
-// // Transaction atomically executes the transaction .
-// func (s *Store) Transaction(ops []*raftpb.Command) error {
-// 	if s.raft.State() != raft.Leader {
-// 		log.Print("not leader")
-// 		return fmt.Errorf("not leader")
-// 	}
-
-// 	if s.transactionInProgress {
-// 		return fmt.Errorf("transaction in progress, try again")
-// 	}
-
-// 	s.t.Lock()
-// 	s.transactionInProgress = true
-// 	s.t.Unlock()
-
-// 	c := &raftpb.RaftCommand{
-// 		Commands: ops,
-// 	}
-
-// 	b, err := proto.Marshal(c)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	f := s.raft.Apply(b, common.RaftTimeout)
-
-// 	s.t.Lock()
-// 	s.transactionInProgress = false
-// 	s.t.Unlock()
-
-// 	return f.Error()
-// }
-
 // Leader returns the current leader of the cluster
 func (s *Store) Leader() string {
 	return string(s.raft.Leader() + "\n")
