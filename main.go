@@ -11,7 +11,7 @@ import (
 	"os/signal"
 	"path"
 	"runtime"
-	"trings"
+	"strings"
 )
 
 const (

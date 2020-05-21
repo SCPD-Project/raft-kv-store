@@ -15,7 +15,7 @@ jobs:
       - checkout
       - restore_cache: # restores saved cache if no changes are detected since last run
           keys:
-            - go-mod-v1-{{ checksum "go.mod" }}
+            - go-mod-v1-{{.Branch }}
       - run:
           name: Download protoc
           # Define variables that need interpolation
@@ -28,13 +28,12 @@ jobs:
          command: |
           go get github.com/golang/protobuf/protoc-gen-go
           go get -v -t -d ./...
-          which protoc
           export PATH="$PATH:$(go env GOPATH)/bin" >> $BASH_ENV
           source $BASH_ENV
           make proto
           make build
       - save_cache: # Store cache in the /go/pkg directory
-          key: go-mod-v1-{{ checksum "go.mod" }}
+          key: go-mod-v1-{{ .Branch }}
           paths:
             - "/go/pkg"
             - "$HOME/.local"
