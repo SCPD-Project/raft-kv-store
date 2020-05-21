@@ -13,9 +13,6 @@ jobs:
     working_directory: /go/src/github.com/SCPD-Project/RAFT-KV-Store
     steps:
       - checkout
-      - restore_cache: # restores saved cache if no changes are detected since last run
-          keys:
-            - go-mod-v1-{{ checksum "go.mod" }}
       - run:
           name: Download protoc
           # Define variables that need interpolation
