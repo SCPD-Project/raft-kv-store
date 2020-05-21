@@ -7,7 +7,7 @@ jobs:
     docker:
       # specify the version
       - image: circleci/golang:1.14
-     environment:
+    environment:
       PROTOC_VERSION: "3.11.4"
 
       # Specify service dependencies here if necessary
