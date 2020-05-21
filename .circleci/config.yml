@@ -6,7 +6,7 @@ jobs:
   build:
     docker:
       # specify the version
-      - image: circleci/golang:1.11
+      - image: circleci/golang:1.9
 
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
@@ -20,3 +20,7 @@ jobs:
     working_directory: /go/src/github.com/SCPD-Project/RAFT-KV-Store
     steps:
       - checkout
+
+      # specify any bash command here prefixed with `run: `
+      - run: go build -o bin/kv
+      - run: go build -o bin/client client/cmd/main.go
