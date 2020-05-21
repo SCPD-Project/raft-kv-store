@@ -44,6 +44,7 @@ func (c *Coordinator) Leader(address string) (string, error) {
 
 // FindLeader returns leader address in form (ip:port) and
 // shard id.
+// TODO: optimize FindLeader
 func (c *Coordinator) FindLeader(key string) (string, int, error) {
 
 	shardid := c.GetShardID(key)
