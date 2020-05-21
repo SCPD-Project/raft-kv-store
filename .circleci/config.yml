@@ -15,7 +15,7 @@ jobs:
       - checkout
       - restore_cache: # restores saved cache if no changes are detected since last run
           keys:
-            - go-mod-v1-{{ checksum "go.sum" }}
+            - go-mod-v1-{{ checksum "go.mod" }}
       - run:
           name: Download protoc
           # Define variables that need interpolation
@@ -34,7 +34,7 @@ jobs:
           make proto
           make build
       - save_cache: # Store cache in the /go/pkg directory
-          key: go-mod-v1-{{ checksum "go.sum" }}
+          key: go-mod-v1-{{ checksum "go.mod" }}
           paths:
             - "/go/pkg"
             - "$HOME/.local"
