@@ -69,10 +69,7 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string,
 	if bucketName == "" {
 		bucketName = "bucket-" + nodeID
 	}
-	persistDbConn, err := newDBConn(filepath.Join(raftDir, nodeID + SnapshotPersistFile), bucketName)
-	if err != nil {
-		l.Fatalf(" Failed creating persistent store with err: %s", err)
-	}
+	persistDbConn := newDBConn(filepath.Join(raftDir, nodeID + SnapshotPersistFile), bucketName, logger)
 
 	s := &Store{
 		ID:          nodeID,
