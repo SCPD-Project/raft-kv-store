@@ -23,6 +23,5 @@ jobs:
 
       # specify any bash command here prefixed with `run: `
       - run: go mod download
-      - run: protoc -I=. --go_out=. raftpb/raft.proto
       - run: go build -o bin/kv
       - run: go build -o bin/client client/cmd/main.go
