@@ -29,10 +29,8 @@ jobs:
           echo $GOPATH
           echo answer2
           echo $GO_PATH
-          echo 'export PATH=$PATH:/$GO_PATH/bin' >> $BASH_ENV
+          echo 'export PATH=$PATH:/$GOPATH/bin' >> $BASH_ENV
           source $BASH_ENV
-          echo answer3
-          echo $GO_PATH
           echo answer4
           echo $GOPATH
           make proto
