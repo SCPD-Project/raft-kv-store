@@ -16,11 +16,11 @@ func newDBConn(file string, bucketName string, logger *log.Logger) (s *persistKv
 	var err error
 	l := logger.WithField("component", "persistStore")
 	persistConn := &persistKvDB{options: bolt.Options{Timeout: 1 * time.Second}, log: l}
-	persistConn.db, err = bolt.Open(file, 0600, &s.options)
+	persistConn.db, err = bolt.Open(file, 0600, &persistConn.options)
 	if err != nil {
 		l.Fatalf(" Failed creating persistent store with err: %s", err)
 	}
-	err = s.db.Update(func(tx *bolt.Tx) error {
+	err = persistConn.db.Update(func(tx *bolt.Tx) error {
 		_, err = tx.CreateBucketIfNotExists([]byte(bucketName))
 		if err != nil {
 			l.Fatalf(" Error in creating bucket: %s with err: %s", bucketName, err)
@@ -52,8 +52,6 @@ func(f *fsmSnapshot) save() {
 	}); if err != nil{
 		f.persistDBConn.log.Warnf(" Failed to persist snapshot for bucket: %s ", f.bucketName)
 	}
-
-	return
 }
 
 func (f *fsm) restore() (kv map[string]string) {

@@ -49,9 +49,9 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore stores the key-value store to a previous state.
 func (f *fsm) Restore(_ io.ReadCloser) error {
-	f.log.Infof(" Snapshot restore from bucket: %s", f.persistBucketName)
 	o := make(map[string]string)
 	o = f.restore()
+	f.log.Infof(" Snapshot restore from bucket: %s with kv-size: %s", f.persistBucketName, len(o))
 
 	// Set the state from the snapshot, no lock required according to
 	// Hashicorp docs.
