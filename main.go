@@ -40,7 +40,7 @@ func init() {
 	flag.IntVarP(&snapshotInterval, "snapshotinterval", "", 30,
 		"Snapshot interval in seconds, 30 seconds if not set")
 	flag.IntVarP(&snapshotThreshold, "snapshotthreshold", "", 5,
-		"Snapshot threshold, 5 if not set")
+		"snapshot threshold of log indices, 5 if not set")
 	flag.StringVarP(&bucketName, "bucketName/shard", "b", "", "Bucket name, randomly" +
 		"generated if not set")
 	flag.Usage = func() {

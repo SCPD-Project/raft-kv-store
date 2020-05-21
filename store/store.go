@@ -69,7 +69,7 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string,
 	if bucketName == "" {
 		bucketName = "bucket-" + nodeID
 	}
-	persistDbConn := newDBConn(filepath.Join(raftDir, nodeID + SnapshotPersistFile), bucketName, logger)
+	persistDbConn := newDBConn(filepath.Join(raftDir, nodeID + "-" + SnapshotPersistFile), bucketName, logger)
 
 	s := &Store{
 		ID:          nodeID,
