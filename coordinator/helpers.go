@@ -28,7 +28,7 @@ func (c *Coordinator) Leader(address string) (string, error) {
 	cmd := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{
-				Method: common.LEADER,
+				Method: raftpb.LEADER,
 			},
 		},
 	}

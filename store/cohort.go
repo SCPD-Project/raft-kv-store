@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"log"
+
 	"net"
 	"net/http"
 	"net/rpc"
@@ -41,7 +42,7 @@ func startCohort(store *Store, listenAddress string) {
 		log.Fatal("listen error:", e)
 	}
 	go http.Serve(l, nil)
-	log.Println("RPC server started successfully")
+	c.s.log.Info("RPC server started successfully")
 
 	// setup raft for cohort
 }
@@ -51,7 +52,7 @@ func startCohort(store *Store, listenAddress string) {
 func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.RPCResponse) error {
 
 	// No need to go to raft for Get/Leader cmds
-	log.Println("Processing rpc call", raftCommand)
+	c.s.log.Info("Processing rpc call", raftCommand)
 	if len(raftCommand.Commands) == 1 {
 		command := raftCommand.Commands[0]
 		switch command.Method {
@@ -93,6 +94,7 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.
 // ProcessTransactionMessages processes prepare/commit messages from the co-ordinator.
 func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.RPCResponse) error {
 
+	c.s.log.Infof("Processing Transaction message :%v :%v", ops.MessageType, ops.Cmds)
 	switch ops.MessageType {
 	case common.Prepare:
 		// If transaction is already in progress, prepare should return "No"
@@ -151,7 +153,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 		if f.Error() != nil {
 			// if this happens, we cannot abort the transaction at this stage. It means
 			// this shard does not have a majority of replicas
-			log.Printf("Unable to apply operations to kv raft instance: %s", f.Error())
+			c.s.log.Warnf("Unable to apply operations to kv raft instance: %s", f.Error())
 		} else {
 			// release the locks
 			c.s.transactionInProgress = false

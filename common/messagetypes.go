@@ -19,7 +19,7 @@ const (
 
 const (
 	SET    = "set"
-	DELETE = "delete"
+	DELETE = "del"
 	GET    = "get"
 	LEADER = "leader"
 )

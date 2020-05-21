@@ -2,7 +2,6 @@ package coordinator
 
 import (
 	"fmt"
-	"log"
 	"net/rpc"
 
 	"github.com/rs/xid"
@@ -11,15 +10,17 @@ import (
 	"github.com/RAFT-KV-STORE/raftpb"
 )
 
+// TODO: Separate out the common code into a function
+
 // Get returns the value for the given key.
 func (c *Coordinator) Get(key string) (string, error) {
 
-	log.Printf("Processing Get request %s", key)
+	c.log.Infof("Processing Get request %s", key)
 	var response common.RPCResponse
 	cmd := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{
-				Method: common.GET,
+				Method: raftpb.GET,
 				Key:    key,
 			},
 		},
@@ -45,12 +46,12 @@ func (c *Coordinator) Get(key string) (string, error) {
 // Set sets the value for the given key.
 func (c *Coordinator) Set(key, value string) error {
 
-	log.Printf("Processing Set request: Key=%s Value=%s", key, value)
+	c.log.Infof("Processing Set request: Key=%s Value=%s", key, value)
 	var response common.RPCResponse
 	cmd := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{
-				Method: common.SET,
+				Method: raftpb.SET,
 				Key:    key,
 				Value:  value,
 			},
@@ -64,7 +65,7 @@ func (c *Coordinator) Set(key, value string) error {
 
 	client, err := rpc.DialHTTP("tcp", addr)
 	if err != nil {
-		log.Fatal("dialing:", err)
+		c.log.Fatal("dialing:", err)
 	}
 
 	err = client.Call("Cohort.ProcessCommands", cmd, &response)
@@ -76,12 +77,12 @@ func (c *Coordinator) Set(key, value string) error {
 // Delete deletes the given key.
 func (c *Coordinator) Delete(key string) error {
 
-	log.Printf("Processing Delete request %s", key)
+	c.log.Infof("Processing Delete request %s", key)
 	var response common.RPCResponse
 	cmd := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{
-				Method: common.DELETE,
+				Method: raftpb.DEL,
 				Key:    key,
 			},
 		},
@@ -106,7 +107,7 @@ func (c *Coordinator) Delete(key string) error {
 // Transaction atomically executes the transaction .
 func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 
-	log.Println("Processing Transaction")
+	c.log.Infof("Processing Transaction")
 	cmds := &raftpb.RaftCommand{
 		Commands: ops,
 	}
@@ -115,9 +116,8 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	gt := c.createGlobalTransactionObject(txid, cmds)
 	numShards := len(gt.ShardToCommands)
 
-	log.Printf("Starting prepare phase for txid: %s\n", txid)
+	c.log.Infof("Starting prepare phase for txid: %s\n", txid)
 	// Prepare Phase
-
 	// Send prepare messages to all the shards involved in
 	// transaction. This is a synchronous operation atm. It can
 	// be asynchronous
@@ -128,13 +128,13 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 		}
 	}
 
-	log.Printf("[txid %s] prepared sent\n", txid)
+	c.log.Infof("[txid %s] prepared sent\n", txid)
 
 	if prepareResponses != numShards {
 		// send abort and report error.
 		// abort will help release the locks
 		// on the shards.
-		log.Printf("[txid %s] Aborting\n", txid)
+		c.log.Infof("[txid %s] Aborting\n", txid)
 		gt.Phase = common.Abort
 		// replicate via raft
 		c.cstate[txid] = gt
@@ -148,8 +148,8 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 		return txid, fmt.Errorf("transaction unsuccesfull, try again")
 	}
 
-	log.Printf("[txid: %s] Prepared recieved: %d Prepared Expected: %d", txid, prepareResponses, numShards)
-	// log the prepared phase and replicate it
+	c.log.Infof("[txid: %s] Prepared recieved: %d Prepared Expected: %d", txid, prepareResponses, numShards)
+	// c.log the prepared phase and replicate it
 	gt.Phase = common.Prepared
 	c.cstate[txid] = gt
 
@@ -169,7 +169,7 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 		}
 	}
 
-	// log the commit phase and replicate it
+	// c.log the commit phase and replicate it
 	// TODO (not important): this can be garbage collected in a separate go-routine, once all acks have
 	// been recieved
 	gt.Phase = common.Committed
@@ -178,7 +178,7 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	// wait for all acks since client should complete replication as
 	// well. not required.
 
-	log.Printf("[txid :%s] Commit Ack recieved: %d Ack Expected: %d", txid, commitResponses, numShards)
+	c.log.Infof("[txid :%s] Commit Ack recieved: %d Ack Expected: %d", txid, commitResponses, numShards)
 
 	return txid, nil
 }
@@ -202,7 +202,7 @@ func (c *Coordinator) createGlobalTransactionObject(txid string, cmds *raftpb.Ra
 				MasterKey:   cmd.Key,
 				MessageType: common.Prepare,
 				Cmds: &raftpb.RaftCommand{
-					Commands: []*raftpb.Command{cmd},
+					Commands: []*raftpb.Command{},
 				},
 			}
 		}

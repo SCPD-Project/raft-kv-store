@@ -30,7 +30,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	command := raftCommand.Commands[0]
 
 	switch command.Method {
-	case common.SET:
+	case raftpb.SET:
 		f.m.Lock()
 		defer f.m.Unlock()
 
@@ -41,7 +41,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		}
 		f.cstate[command.Key] = &gt
 
-	case common.DELETE:
+	case raftpb.DEL:
 		f.m.Lock()
 		defer f.m.Unlock()
 

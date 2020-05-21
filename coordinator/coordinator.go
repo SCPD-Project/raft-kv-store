@@ -3,7 +3,6 @@ package coordinator
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/rpc"
 	"os"
 	"sync"
@@ -14,6 +13,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"github.com/hashicorp/raft"
+	log "github.com/sirupsen/logrus"
 )
 
 // Coordinator ...
@@ -25,6 +25,7 @@ type Coordinator struct {
 	raft *raft.Raft // The consensus mechanism
 
 	// coordinator state - This has to be replicated.
+	// TODO: concurrent transactions
 	cstate map[string]*common.GlobalTransaction
 	m      sync.Mutex
 
@@ -33,10 +34,11 @@ type Coordinator struct {
 	ShardToPeers map[int][]string
 
 	Client *rpc.Client
+	log    *log.Entry
 }
 
 // New initailises the new co-ordinator instance
-func New(nodeID, raftDir, raftAddress string, enableSingle bool, shardInfo *config.Config) (*Coordinator, error) {
+func New(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSingle bool, shardInfo *config.Config) (*Coordinator, error) {
 
 	if nodeID == "" {
 		nodeID = "node-" + common.RandNodeID(common.NodeIDLen)
@@ -44,7 +46,8 @@ func New(nodeID, raftDir, raftAddress string, enableSingle bool, shardInfo *conf
 	if raftDir == "" {
 		raftDir = fmt.Sprintf("./%s", nodeID)
 	}
-	log.Printf("Preparing node-%s with persistent directory %s, raftAddress %s", nodeID, raftDir, raftAddress)
+	l := logger.WithField("component", "coordinator")
+	l.Infof("Preparing node-%s with persistent directory %s, raftAddress %s", nodeID, raftDir, raftAddress)
 	os.MkdirAll(raftDir, 0700)
 
 	shardToPeers := make(map[int][]string)
@@ -59,6 +62,7 @@ func New(nodeID, raftDir, raftAddress string, enableSingle bool, shardInfo *conf
 
 		ShardToPeers: shardToPeers,
 		cstate:       make(map[string]*common.GlobalTransaction),
+		log:          l,
 	}
 
 	ra, err := common.SetupRaft((*fsm)(c), c.ID, c.RaftAddress, c.RaftDir, enableSingle)
@@ -83,22 +87,22 @@ func (c *Coordinator) Replicate(key, op string, value *common.GlobalTransaction)
 
 	switch op {
 
-	case common.SET:
+	case raftpb.SET:
 		cmd = &raftpb.RaftCommand{
 			Commands: []*raftpb.Command{
 				{
-					Method: common.SET,
+					Method: raftpb.SET,
 					Key:    key,
 					Value:  string(gt),
 				},
 			},
 		}
 
-	case common.DELETE:
+	case raftpb.DEL:
 		cmd = &raftpb.RaftCommand{
 			Commands: []*raftpb.Command{
 				{
-					Method: common.DELETE,
+					Method: raftpb.DEL,
 					Key:    key,
 				},
 			},

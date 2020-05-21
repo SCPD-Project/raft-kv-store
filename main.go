@@ -90,7 +90,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("unable to get shard info: %s", shardInfo)
 		}
-		c, err := coordinator.New(nodeID, raftAddress, raftDir, joinHTTPAddress == "", shardInfo)
+		c, err := coordinator.New(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", shardInfo)
 		if err != nil {
 			log.Fatalf("unable to setup coordinator:%s", err)
 		}

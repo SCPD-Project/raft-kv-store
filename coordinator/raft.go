@@ -2,7 +2,6 @@ package coordinator
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/hashicorp/raft"
 )
@@ -10,11 +9,11 @@ import (
 // Join joins a node, identified by nodeID and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
 func (c *Coordinator) Join(nodeID, addr string) error {
-	log.Printf("received join request for remote node %s at %s", nodeID, addr)
+	c.log.Infof("received join request for remote node %s at %s", nodeID, addr)
 
 	configFuture := c.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
-		log.Printf("failed to get raft configuration: %v", err)
+		c.log.Errorf("failed to get raft configuration: %v", err)
 		return err
 	}
 
@@ -25,7 +24,7 @@ func (c *Coordinator) Join(nodeID, addr string) error {
 			// However if *both* the ID and the address are the same, then nothing -- not even
 			// a join operation -- is needed.
 			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(nodeID) {
-				log.Printf("node %s at %s already member of cluster, ignoring join request", nodeID, addr)
+				c.log.Infof("node %s at %s already member of cluster, ignoring join request", nodeID, addr)
 				return nil
 			}
 
@@ -40,6 +39,6 @@ func (c *Coordinator) Join(nodeID, addr string) error {
 	if f.Error() != nil {
 		return f.Error()
 	}
-	log.Printf("node %s at %s joined successfully", nodeID, addr)
+	c.log.Infof("node %s at %s joined successfully", nodeID, addr)
 	return nil
 }

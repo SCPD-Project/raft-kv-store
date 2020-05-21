@@ -17,8 +17,3 @@ message JoinMsg {
     string RaftAddress = 1;
     string ID = 2;
 }
-
-message RegisterMsg {
-    string ShardID = 1;
-    string Address = 2;
-}
