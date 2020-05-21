@@ -4,9 +4,9 @@ import (
 	"fmt"
 	httpd "github.com/RAFT-KV-STORE/http"
 	"github.com/RAFT-KV-STORE/store"
+	nested "github.com/antonfisher/nested-logrus-formatter"
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
-	nested "github.com/antonfisher/nested-logrus-formatter"
 	"os"
 	"os/signal"
 	"path"
@@ -26,6 +26,9 @@ var (
 	joinHttpAddress string
 	raftDir         string
 	nodeID          string
+	snapshotInterval int
+	snapshotThreshold int
+	bucketName      string
 )
 
 func init() {
@@ -34,6 +37,12 @@ func init() {
 	flag.StringVarP(&joinHttpAddress, "join", "j", "", "Set joining HTTP address, if any")
 	flag.StringVarP(&nodeID, "id", "i", "", "Node ID, randomly generated if not set")
 	flag.StringVarP(&raftDir, "dir", "d", "", "Raft directory, ./$(nodeID) if not set")
+	flag.IntVarP(&snapshotInterval, "snapshotinterval", "", 30,
+		"Snapshot interval in seconds, 30 seconds if not set")
+	flag.IntVarP(&snapshotThreshold, "snapshotthreshold", "", 5,
+		"snapshot threshold of log indices, 5 if not set")
+	flag.StringVarP(&bucketName, "bucketName/shard", "b", "", "Bucket name, randomly" +
+		"generated if not set")
 	flag.Usage = func() {
 		log.Errorf("Usage: %s [options]\n", os.Args[0])
 		flag.PrintDefaults()
@@ -56,7 +65,10 @@ func main() {
 
 	logger.SetReportCaller(true)
 
-	kv := store.NewStore(logger, nodeID, raftAddress, raftDir)
+	store.SnapshotInterval = snapshotInterval
+	store.SnapshotThreshold = snapshotThreshold
+
+	kv := store.NewStore(logger, nodeID, raftAddress, raftDir, bucketName)
 	kv.Open(joinHttpAddress == "")
 
 	h := httpd.NewService(logger, listenAddress, kv)

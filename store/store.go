@@ -27,6 +27,12 @@ const (
 	retainSnapshotCount = 2
 	raftTimeout         = 10 * time.Second
 	nodeIDLen           = 5
+	SnapshotPersistFile = "persistedKeyValues.db"
+)
+
+var (
+	SnapshotThreshold int
+	SnapshotInterval int
 )
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.
@@ -43,11 +49,14 @@ type Store struct {
 
 	raft   *raft.Raft // The consensus mechanism
 	log	   *log.Entry
-	file   *os.File // persistent store
+	persistBucketName string
+	persistKvDbConn   *persistKvDB // persistent store
+
 }
 
 // NewStore returns a new Store.
-func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string) *Store {
+func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string,
+	          bucketName string) *Store {
 	if nodeID == "" {
 		nodeID = "node-" + randNodeID(nodeIDLen)
 	}
@@ -57,6 +66,10 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string) *Store {
 	l := logger.WithField("component", "store")
 	l.Infof("Preparing node-%s with persistent diretory %s, raftAddress %s", nodeID, raftDir, raftAddress)
 	os.MkdirAll(raftDir, 0700)
+	if bucketName == "" {
+		bucketName = "bucket-" + nodeID
+	}
+	persistDbConn := newDBConn(filepath.Join(raftDir, nodeID + "-" + SnapshotPersistFile), bucketName, logger)
 
 	s := &Store{
 		ID:          nodeID,
@@ -64,6 +77,8 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string) *Store {
 		RaftDir:     raftDir,
 		kv:          make(map[string]string),
 		log:      l,
+		persistKvDbConn: persistDbConn,
+		persistBucketName: bucketName,
 	}
 	return s
 }
@@ -83,6 +98,9 @@ func randNodeID(n int) string {
 func (s *Store) Open(enableSingle bool) {
 	// Setup Raft configuration.
 	config := raft.DefaultConfig()
+	// Override defaults with configured values
+	config.SnapshotThreshold = uint64(SnapshotThreshold)
+	config.SnapshotInterval = time.Duration(SnapshotInterval) * time.Second
 	config.LocalID = raft.ServerID(s.ID)
 
 	// Setup Raft communication.
