@@ -28,8 +28,8 @@ jobs:
           echo answer1
           echo $GOPATH
           echo 'export PATH=$PATH:/$GOPATH/bin' >> $BASH_ENV
-          chmod +x protoc
           source $BASH_ENV
+          chmod +x protoc
           echo answer4
           echo $GOPATH
           make proto
