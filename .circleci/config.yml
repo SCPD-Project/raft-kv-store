@@ -24,17 +24,17 @@ jobs:
       # specify any bash command here prefixed with `run: `
       - run: 
          command: |
-          #go mod download
-          go get -v -t -d ./...
           #go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
+          go get -v -t -d ./...
+          go install
           echo answer1
           echo $GOPATH
           #echo 'export PATH=$PATH:/$GOPATH/bin' >> $BASH_ENV
           #source $BASH_ENV
           echo 'path'
           echo $PATH
-          #chmod +x protoc
+          chmod +x protoc
           #echo answer4
           #echo $GOPATH
-          make proto
+          #make proto
           #make build
