@@ -24,10 +24,9 @@ jobs:
       # specify any bash command here prefixed with `run: `
       - run: 
          command: |
-          curl -s -L https://github.com/protocolbuffers/protobuf/releases/download/v3.5.1/protoc-3.5.1-linux-x86_64.zip > /tmp/protoc.zip
-          unzip -d /tmp /tmp/protoc.zip
-          chmod +x /tmp/bin/protoc
-          echo 'export PATH=/tmp/bin:$PATH' >> $BASH_ENV
+          go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
+          echo export GO_PATH=~/go
+          echo export PATH=$PATH:/$GO_PATH/bin >> $BASH_ENV
           source $BASH_ENV
           make proto
           make build
