@@ -26,21 +26,13 @@ jobs:
          command: |
           #go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
           go get github.com/golang/protobuf/protoc-gen-go
-		      go get -v -t -d ./...
-		      #go install
+          go get -v -t -d ./...
+          #go install
           #export PATH="$PATH:$(go env GOPATH)/bin" >> $BASH_ENV
           #source $BASH_ENV
-		      echo answer1
-		      echo $GOPATH
+          echo printing protoc location
+          which protoc
           cd $GOPATH
           ls -ltr
-          which protoc
-		      #echo 'export PATH=$PATH:/$GOPATH/bin' >> $BASH_ENV
-		      #source $BASH_ENV
-		      echo 'path'
-		      echo $PATH
-		      #chmod +x protoc
-		      #echo answer4
-		      #echo $GOPATH
-		      #make proto
-		      #make build
+          #echo 'export PATH=$PATH:/$GOPATH/bin' >> $BASH_ENV
+          #source $BASH_ENV
