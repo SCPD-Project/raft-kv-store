@@ -25,8 +25,7 @@ jobs:
       - run: 
          command: |
           go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
-          #echo export GO_PATH=~/go
-          #echo export PATH=$PATH:/$GO_PATH/bin >> $BASH_ENV
-          #source $BASH_ENV
+          echo 'export PATH=$PATH:/$GOPATH/bin' >> $BASH_ENV
+          source $BASH_ENV
           make proto
           make build
