@@ -22,7 +22,9 @@ jobs:
     working_directory: /go/src/github.com/SCPD-Project/RAFT-KV-Store
     steps:
       - checkout
-      # specify any bash command here prefixed with `run: `
+      - restore_cache: # restores saved cache if no changes are detected since last run
+          keys:
+            - v1-pkg-cache
       - run:
           name: Download protoc
           # Define variables that need interpolation
@@ -33,16 +35,21 @@ jobs:
             unzip protoc-$PROTOC_VERSION-linux-x86_64.zip -d $HOME/.local
       - run:
          command: |
-          go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
+          #go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
           #go get github.com/golang/protobuf/protoc-gen-go
           go get -v -t -d ./...
           export PATH="$PATH:$(go env GOPATH)/bin" >> $BASH_ENV
           source $BASH_ENV
-          echo $PATH
-          echo printing protoc location
+          #echo $PATH
+          #echo printing protoc location
           #which protoc
           #cd $GOPATH
           #ls -ltr
           #echo 'export PATH=$PATH:/$GOPATH/bin' >> $BASH_ENV
           #source $BASH_ENV
           make proto
+          make build
+      - save_cache: # Store cache in the /go/pkg directory
+          key: v1-pkg-cache
+          paths:
+            - "/go/pkg"
