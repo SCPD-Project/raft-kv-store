@@ -42,13 +42,6 @@ jobs:
           export PATH="$PATH:$(go env GOPATH)/bin" >> $BASH_ENV
           which protoc-gen-go 
           source $BASH_ENV
-          #echo $PATH
-          #echo printing protoc location
-          #which protoc
-          #cd $GOPATH
-          #ls -ltr
-          #echo 'export PATH=$PATH:/$GOPATH/bin' >> $BASH_ENV
-          #source $BASH_ENV
           make proto
           make build
       - save_cache: # Store cache in the /go/pkg directory
