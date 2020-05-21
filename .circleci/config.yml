@@ -7,6 +7,8 @@ jobs:
     docker:
       # specify the version
       - image: circleci/golang:1.14
+     environment:
+      PROTOC_VERSION: "3.11.4"
 
       # Specify service dependencies here if necessary
       # CircleCI maintains a library of pre-built images
@@ -20,19 +22,26 @@ jobs:
     working_directory: /go/src/github.com/SCPD-Project/RAFT-KV-Store
     steps:
       - checkout
-
       # specify any bash command here prefixed with `run: `
-      - run: 
+      - run:
+          name: Download protoc
+          # Define variables that need interpolation
+          # As CircleCI's each `run` declaration starts a new shell, we need to persist them to $BASH_ENV
+          command: |
+            echo 'export PATH=$HOME/.local/bin:$PATH' >> $BASH_ENV
+            curl -OL https://github.com/google/protobuf/releases/download/v$PROTOC_VERSION/protoc-$PROTOC_VERSION-linux-x86_64.zip
+            unzip protoc-$PROTOC_VERSION-linux-x86_64.zip -d $HOME/.local
+      - run:
          command: |
           #go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
-          go get github.com/golang/protobuf/protoc-gen-go
+          #go get github.com/golang/protobuf/protoc-gen-go
           go get -v -t -d ./...
-          #go install
           #export PATH="$PATH:$(go env GOPATH)/bin" >> $BASH_ENV
-          #source $BASH_ENV
+          source $BASH_ENV
+          echo $PATH
           echo printing protoc location
           which protoc
-          cd $GOPATH
-          ls -ltr
+          #cd $GOPATH
+          #ls -ltr
           #echo 'export PATH=$PATH:/$GOPATH/bin' >> $BASH_ENV
           #source $BASH_ENV
