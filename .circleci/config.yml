@@ -32,8 +32,8 @@ jobs:
           #source $BASH_ENV
           echo 'path'
           echo $PATH
-          chmod +x protoc
+          #chmod +x protoc
           #echo answer4
           #echo $GOPATH
-          #make proto
+          make proto
           #make build
