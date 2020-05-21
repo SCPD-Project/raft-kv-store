@@ -27,9 +27,8 @@ jobs:
           go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
           echo answer1
           echo $GOPATH
-          echo answer2
-          echo $GO_PATH
           echo 'export PATH=$PATH:/$GOPATH/bin' >> $BASH_ENV
+          chmod +x protoc
           source $BASH_ENV
           echo answer4
           echo $GOPATH
