@@ -1,6 +1,3 @@
-https://app.circleci.com/projects/project-setup/github/renga86/practice_go
-
-
 # Golang CircleCI 2.0 configuration file
 #
 # Check https://circleci.com/docs/2.0/language-go/ for more details
@@ -38,5 +35,5 @@ jobs:
           chmod +x protoc
           #echo answer4
           #echo $GOPATH
-          make proto
+          #make proto
           #make build
