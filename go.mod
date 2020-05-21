@@ -6,6 +6,7 @@ require (
 	github.com/antonfisher/nested-logrus-formatter v1.1.0
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.3
+        github.com/golang/protoc-gen-go v1.3.3
 	github.com/hashicorp/raft v1.1.2
 	github.com/hashicorp/raft-boltdb v0.0.0-20191021154308-4207f1bf0617
 	github.com/sirupsen/logrus v1.6.0
