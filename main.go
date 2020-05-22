@@ -90,7 +90,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("unable to get shard info: %s", shardInfo)
 		}
-		c := coordinator.NewCoordinator(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", shardInfo)
+		c := coordinator.NewCoordinator(logger, nodeID, raftDir, raftAddress, joinHTTPAddress == "", shardInfo)
 
 		h := httpd.NewService(logger, listenAddress, nil, c)
 		h.Start(joinHTTPAddress)
