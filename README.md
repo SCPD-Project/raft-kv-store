@@ -36,7 +36,7 @@ bin/client -e :17000
 Client commands:
 - `get [key]`: get value from RAFT KV store
   - Examples: `get class` or `get "distributed system"`
-- `put [key] [value]`: put (key, value) on RAFT KV store
+- `set [key] [value]`: put (key, value) on RAFT KV store
   - Examples: `put class cs244b` or `put "2020 spring class" "distributed system"`
 - `del [key]`: delete key from RAFT KV store
   - Examples: `del class` or `del "distributed system"`
@@ -45,8 +45,8 @@ Client commands:
   - Example:
    ```bazaar
    txn 
-   put class cs244b
-   put univ stanford
+   set class cs244b
+   set univ stanford
    del class
    end
    ```
