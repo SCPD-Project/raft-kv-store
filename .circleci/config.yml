@@ -1,0 +1,40 @@
+# Golang CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-go/ for more details
+version: 2
+jobs:
+  build:
+    docker:
+      # specify the version
+      - image: circleci/golang:1.14
+    environment:
+      PROTOC_VERSION: "3.11.4"
+
+    working_directory: /go/src/github.com/SCPD-Project/RAFT-KV-Store
+    steps:
+      - checkout
+      - restore_cache: # restores saved cache if no changes are detected since last run
+          keys:
+            - go-mod-v1-{{.Branch }}
+      - run:
+          name: Download protoc
+          # Define variables that need interpolation
+          # As CircleCI's each `run` declaration starts a new shell, we need to persist them to $BASH_ENV
+          command: |
+            echo 'export PATH=$HOME/.local/bin:$PATH' >> $BASH_ENV
+            curl -OL https://github.com/google/protobuf/releases/download/v$PROTOC_VERSION/protoc-$PROTOC_VERSION-linux-x86_64.zip
+            unzip protoc-$PROTOC_VERSION-linux-x86_64.zip -d $HOME/.local
+      - run:
+         command: |
+          go get github.com/golang/protobuf/protoc-gen-go@v1.3.3
+          go get -v -t -d ./...
+          export PATH="$PATH:$(go env GOPATH)/bin" >> $BASH_ENV
+          source $BASH_ENV
+          make proto
+          make build
+      - save_cache: # Store cache in the /go/pkg directory
+          key: go-mod-v1-{{ .Branch }}
+          paths:
+            - "/go/pkg"
+            - "$HOME/.local"
+
