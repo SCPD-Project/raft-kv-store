@@ -18,31 +18,33 @@ import (
 // Cohort maintains state of the cohort state machine. It also starts
 // a rpc server to listen to commands from coordinator.
 type Cohort struct {
-	s *Store
+	store *Store
 
 	// TODO: raft instance to replicate fsm of cohort
 	cohortRaft *raft.Raft
 
 	// replicate cohort state
 	// txid -> tx cmds for this cohort(shard)
+	// TODO come up with a better name
 	cState map[string]*common.ShardOps
-	m      sync.Mutex
+	// TODO use lock per key
+	mu sync.Mutex
 }
 
 func startCohort(store *Store, listenAddress string) {
 
 	c := &Cohort{
-		s:      store,
+		store:  store,
 		cState: make(map[string]*common.ShardOps),
 	}
 	rpc.Register(c)
 	rpc.HandleHTTP()
-	l, e := net.Listen("tcp", listenAddress)
-	if e != nil {
-		log.Fatal("listen error:", e)
+	listener, err := net.Listen("tcp", listenAddress)
+	if err != nil {
+		log.Fatal("listen error:", err)
 	}
-	go http.Serve(l, nil)
-	c.s.log.Info("RPC server started successfully")
+	go http.Serve(listener, nil)
+	c.store.log.Info("RPC server started successfully")
 
 	// setup raft for cohort
 }
@@ -52,23 +54,23 @@ func startCohort(store *Store, listenAddress string) {
 func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.RPCResponse) error {
 
 	// No need to go to raft for Get/Leader cmds
-	c.s.log.Info("Processing rpc call", raftCommand)
+	c.store.log.Info("Processing rpc call", raftCommand)
 	if len(raftCommand.Commands) == 1 {
 		command := raftCommand.Commands[0]
 		switch command.Method {
-		case GET:
+		case raftpb.GET:
 			*reply = common.RPCResponse{
 				Status: 0,
-				Value:  c.s.kv[command.Key],
+				Value:  c.store.kv[command.Key],
 			}
 			return nil
 
-		case LEADER:
+		case raftpb.LEADER:
 
-			if c.s.raft.State() == raft.Leader {
+			if c.store.raft.State() == raft.Leader {
 				*reply = common.RPCResponse{
 					Status: 0,
-					Value:  c.s.rpcAddress,
+					Value:  c.store.rpcAddress,
 				}
 			} else {
 				*reply = common.RPCResponse{
@@ -86,7 +88,7 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.
 		return err
 	}
 
-	f := c.s.raft.Apply(b, common.RaftTimeout)
+	f := c.store.raft.Apply(b, common.RaftTimeout)
 
 	return f.Error()
 }
@@ -94,18 +96,18 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.
 // ProcessTransactionMessages processes prepare/commit messages from the co-ordinator.
 func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.RPCResponse) error {
 
-	c.s.log.Infof("Processing Transaction message :%v :%v", ops.MessageType, ops.Cmds)
-	switch ops.MessageType {
+	c.store.log.Infof("Processing Transaction message :%v :%v", ops.Phase, ops.Cmds)
+	switch ops.Phase {
 	case common.Prepare:
 		// If transaction is already in progress, prepare should return "No"
-		c.m.Lock()
-		defer c.m.Unlock()
-		if c.s.transactionInProgress {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if c.store.transactionInProgress {
 			*reply = common.RPCResponse{
 				// TODO: use different status codes to give appropriate
 				// error to co-ordinator. For now, -1 is failure
 				Status: -1,
-				Value:  common.NotPrepared,
+				Value:  string(common.NotPrepared),
 			}
 			// no need to update cohort state machine, it is equivalent
 			// to a no transaction.
@@ -113,34 +115,34 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 		}
 
 		// below should be raft call, once raft is setup.
-		ops.MessageType = common.Prepared
+		ops.Phase = common.Prepared
 		// This should be replicated via raft with raft Apply, once setup
 		// if raft fails, send NotPrepared. log 2 pc message
 		c.cState[ops.Txid] = ops
 
 		// lock is held above
-		c.s.transactionInProgress = true
+		c.store.transactionInProgress = true
 		*reply = common.RPCResponse{
 			Status: 0,
-			Value:  common.Prepared,
+			Value:  string(common.Prepared),
 		}
 
 	case common.Commit:
 
-		c.m.Lock()
-		defer c.m.Unlock()
+		c.mu.Lock()
+		defer c.mu.Unlock()
 
-		if c.cState[ops.Txid].MessageType != common.Prepared {
+		if c.cState[ops.Txid].Phase != common.Prepared {
 			// this should never happen
 			*reply = common.RPCResponse{
 				Status: -1,
-				Value:  common.Invalid,
+				Value:  string(common.Invalid),
 			}
 			return fmt.Errorf("invalid state")
 		}
 
 		// log 2 pc commit message, replicate via raft
-		ops.MessageType = common.Committed
+		ops.Phase = common.Committed
 		c.cState[ops.Txid] = ops
 
 		// Apply to kv
@@ -149,31 +151,30 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 			return err
 		}
 
-		f := c.s.raft.Apply(b, common.RaftTimeout)
-		if f.Error() != nil {
+		if f := c.store.raft.Apply(b, common.RaftTimeout); f.Error() != nil {
 			// if this happens, we cannot abort the transaction at this stage. It means
 			// this shard does not have a majority of replicas
-			c.s.log.Warnf("Unable to apply operations to kv raft instance: %s", f.Error())
+			c.store.log.Warnf("Unable to apply operations to kv raft instance: %s", f.Error())
 		} else {
 			// release the locks
-			c.s.transactionInProgress = false
+			c.store.transactionInProgress = false
 		}
 		*reply = common.RPCResponse{
 			Status: 0,
-			Value:  common.Committed,
+			Value:  string(common.Committed),
 		}
 
 	case common.Abort:
-		c.m.Lock()
-		defer c.m.Unlock()
+		c.mu.Lock()
+		defer c.mu.Unlock()
 
 		// log 2 pc abort message, replicate via raft
 		// this should be set operation on raft
-		c.cState[ops.Txid].MessageType = common.Abort
-		c.s.transactionInProgress = false
+		c.cState[ops.Txid].Phase = common.Abort
+		c.store.transactionInProgress = false
 		*reply = common.RPCResponse{
 			Status: 0,
-			Value:  common.Aborted,
+			Value:  string(common.Aborted),
 		}
 
 	}

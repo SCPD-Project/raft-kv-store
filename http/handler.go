@@ -79,7 +79,7 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 			msg = fmt.Sprintf("Key=%s, Value=%s", key, val)
 		}
 
-		io.WriteString(w, fmt.Sprintf("Key: %s, Value: %s\n", key, val))
+		io.WriteString(w, msg)
 
 	case http.MethodPost:
 		var m SetJSON
@@ -125,17 +125,13 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// handleLeader mainly used for debugs.
 func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request) {
-	// log.Print("Handling request for leader")
 
-	// leader, err := s.coordinator.Leader()
-	// if err != nil {
-	// 	io.WriteString(w, err.Error()+"\n")
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	return
-	// }
-	// io.WriteString(w, leader)
-
+	s.log.Debug("Handling request for leader")
+	if s.store != nil {
+		io.WriteString(w, string(s.store.Leader()))
+	}
 }
 
 // handleTransaction

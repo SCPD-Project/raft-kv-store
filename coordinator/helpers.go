@@ -47,18 +47,18 @@ func (c *Coordinator) Leader(address string) (string, error) {
 // TODO: optimize FindLeader
 func (c *Coordinator) FindLeader(key string) (string, int, error) {
 
-	shardid := c.GetShardID(key)
+	shardID := c.GetShardID(key)
 	// make rpc calls to get the leader
-	nodes := c.ShardToPeers[shardid]
+	nodes := c.ShardToPeers[shardID]
 
-	for _, nodeaddr := range nodes {
-		leader, err := c.Leader(nodeaddr)
+	for _, nodeAddr := range nodes {
+		leader, err := c.Leader(nodeAddr)
 
 		if err == nil && leader != "" {
-			return leader, shardid, nil
+			return leader, shardID, nil
 		}
 	}
-	return "", -1, fmt.Errorf("shard %d is not reachable", shardid)
+	return "", -1, fmt.Errorf("shard %d is not reachable", shardID)
 }
 
 // SendMessageToShard sends prepare message to a shard. The return value
@@ -77,12 +77,15 @@ func (c *Coordinator) SendMessageToShard(ops *common.ShardOps) bool {
 	// TODO: Add retries, time out handled by library.
 	client, err := rpc.DialHTTP("tcp", addr)
 	if err != nil {
+		c.log.Error(err)
 		return false
 	}
 
 	err = client.Call("Cohort.ProcessTransactionMessages", ops, &response)
 	if err != nil {
+		c.log.Error(err)
 		return false
 	}
-	return response.Value == common.Prepared || response.Value == common.Committed || response.Value == common.Aborted
+	return response.Value == string(common.Prepared) || response.Value == string(common.Committed) || response.Value == string(common.Aborted)
+
 }

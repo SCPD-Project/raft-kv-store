@@ -113,7 +113,7 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	}
 
 	txid := xid.New().String()
-	gt := c.createGlobalTransactionObject(txid, cmds)
+	gt := c.newGlobalTransaction(txid, cmds)
 	numShards := len(gt.ShardToCommands)
 
 	c.log.Infof("Starting prepare phase for txid: %s\n", txid)
@@ -121,7 +121,7 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	// Send prepare messages to all the shards involved in
 	// transaction. This is a synchronous operation atm. It can
 	// be asynchronous
-	prepareResponses := 0
+	var prepareResponses int
 	for _, shardops := range gt.ShardToCommands {
 		if c.SendMessageToShard(shardops) {
 			prepareResponses++
@@ -140,9 +140,9 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 		c.cstate[txid] = gt
 
 		for _, shardops := range gt.ShardToCommands {
-			shardops.MessageType = common.Abort
+			shardops.Phase = common.Abort
 			// best effort
-			_ = c.SendMessageToShard(shardops)
+			c.SendMessageToShard(shardops)
 
 		}
 		return txid, fmt.Errorf("transaction unsuccesfull, try again")
@@ -159,12 +159,12 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	// retry on error.
 
 	// Commit
-	commitResponses := 0
-	for _, shardops := range gt.ShardToCommands {
+	var commitResponses int
+	for _, shardOps := range gt.ShardToCommands {
 		// Relicate via Raft
 		c.cstate[txid].Phase = common.Commit
-		shardops.MessageType = common.Commit
-		if c.SendMessageToShard(shardops) {
+		shardOps.Phase = common.Commit
+		if c.SendMessageToShard(shardOps) {
 			commitResponses++
 		}
 	}
@@ -183,7 +183,7 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	return txid, nil
 }
 
-func (c *Coordinator) createGlobalTransactionObject(txid string, cmds *raftpb.RaftCommand) *common.GlobalTransaction {
+func (c *Coordinator) newGlobalTransaction(txid string, cmds *raftpb.RaftCommand) *common.GlobalTransaction {
 
 	gt := &common.GlobalTransaction{
 		Txid:  txid,
@@ -194,20 +194,21 @@ func (c *Coordinator) createGlobalTransactionObject(txid string, cmds *raftpb.Ra
 	shardToCmds := make(map[int]*common.ShardOps)
 
 	for _, cmd := range cmds.Commands {
+		shardID := c.GetShardID(cmd.Key)
 
-		if _, ok := shardToCmds[c.GetShardID(cmd.Key)]; !ok {
+		if _, ok := shardToCmds[shardID]; !ok {
 
-			shardToCmds[c.GetShardID(cmd.Key)] = &common.ShardOps{
-				Txid:        txid,
-				MasterKey:   cmd.Key,
-				MessageType: common.Prepare,
+			shardToCmds[shardID] = &common.ShardOps{
+				Txid:      txid,
+				MasterKey: cmd.Key,
+				Phase:     common.Prepare,
 				Cmds: &raftpb.RaftCommand{
 					Commands: []*raftpb.Command{},
 				},
 			}
 		}
 		// TODO: this is short, but convoluted. split this.
-		shardToCmds[c.GetShardID(cmd.Key)].Cmds.Commands = append(shardToCmds[c.GetShardID(cmd.Key)].Cmds.Commands, cmd)
+		shardToCmds[shardID].Cmds.Commands = append(shardToCmds[shardID].Cmds.Commands, cmd)
 	}
 	gt.ShardToCommands = shardToCmds
 

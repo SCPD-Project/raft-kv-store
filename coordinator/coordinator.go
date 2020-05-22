@@ -10,7 +10,7 @@ import (
 	"github.com/RAFT-KV-STORE/common"
 	"github.com/RAFT-KV-STORE/config"
 	"github.com/RAFT-KV-STORE/raftpb"
-	"google.golang.org/protobuf/proto"
+	"github.com/golang/protobuf/proto"
 
 	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"
@@ -38,7 +38,7 @@ type Coordinator struct {
 }
 
 // New initailises the new co-ordinator instance
-func New(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSingle bool, shardInfo *config.Config) (*Coordinator, error) {
+func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSingle bool, shardInfo *config.ShardsConfig) *Coordinator {
 
 	if nodeID == "" {
 		nodeID = "node-" + common.RandNodeID(common.NodeIDLen)
@@ -67,12 +67,12 @@ func New(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSingle b
 
 	ra, err := common.SetupRaft((*fsm)(c), c.ID, c.RaftAddress, c.RaftDir, enableSingle)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to setup raft instance for kv store:%s", err)
+		l.Fatalf("Unable to setup raft instance for kv store:%s", err)
 	}
 
 	c.raft = ra
 
-	return c, nil
+	return c
 }
 
 // Replicate replicates put/get/deletes on coordinator's

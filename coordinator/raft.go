@@ -8,6 +8,7 @@ import (
 
 // Join joins a node, identified by nodeID and located at addr, to this store.
 // The node must be ready to respond to Raft communications at that address.
+// TODO: Make an interface
 func (c *Coordinator) Join(nodeID, addr string) error {
 	c.log.Infof("received join request for remote node %s at %s", nodeID, addr)
 

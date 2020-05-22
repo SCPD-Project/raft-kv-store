@@ -90,10 +90,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("unable to get shard info: %s", shardInfo)
 		}
-		c, err := coordinator.New(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", shardInfo)
-		if err != nil {
-			log.Fatalf("unable to setup coordinator:%s", err)
-		}
+		c := coordinator.NewCoordinator(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", shardInfo)
 
 		h := httpd.NewService(logger, listenAddress, nil, c)
 		h.Start(joinHTTPAddress)
@@ -102,10 +99,7 @@ func main() {
 	} else {
 
 		// need to start rpc server
-		kv, err := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", rpcAddress, bucketName)
-		if err != nil {
-			log.Fatalf("Unable to setup kv store:%s", err)
-		}
+		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", rpcAddress, bucketName)
 
 		h := httpd.NewService(logger, listenAddress, kv, nil)
 		h.Start(joinHTTPAddress)

@@ -10,15 +10,15 @@ const (
 	ConfigFilePath = "config/config.json"
 )
 
-// Config to read shards
-type Config struct {
+// ShardsConfig to read shards
+type ShardsConfig struct {
 	Shards [][]string `json:"shards"`
 }
 
 // GetShards reads shard info from config file
-func GetShards() (*Config, error) {
+func GetShards() (*ShardsConfig, error) {
 
-	config := &Config{}
+	config := &ShardsConfig{}
 	data, err := ioutil.ReadFile(ConfigFilePath)
 	if err != nil {
 		return nil, err

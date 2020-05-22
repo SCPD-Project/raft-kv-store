@@ -101,7 +101,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("Serving request for path: %s\n", r.URL.Path)
+	s.log.Infof("Serving request for path: %s\n", r.URL.Path)
 	if s.coordinator != nil {
 		if strings.HasPrefix(r.URL.Path, "/key") {
 			s.handleKeyRequest(w, r)

@@ -29,13 +29,6 @@ const (
 	SnapshotPersistFile = "persistedKeyValues.db"
 )
 
-var (
-	SET    = "set"
-	DELETE = "delete"
-	GET    = "get"
-	LEADER = "leader"
-)
-
 // Store is a simple key-value store, where all changes are made via Raft consensus.
 type Store struct {
 	ID          string
@@ -58,7 +51,7 @@ type Store struct {
 }
 
 // NewStore returns a new Store.
-func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSingle bool, rpcAddress string, bucketName string) (*Store, error) {
+func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSingle bool, rpcAddress string, bucketName string) *Store {
 	if nodeID == "" {
 		nodeID = "node-" + common.RandNodeID(common.NodeIDLen)
 	}
@@ -85,13 +78,13 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSin
 	}
 	ra, err := common.SetupRaft((*fsm)(s), s.ID, s.RaftAddress, s.RaftDir, enableSingle)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to setup raft instance for kv store:%s", err)
+		l.Fatalf("Unable to setup raft instance for kv store:%s", err)
 	}
 
 	s.raft = ra
 	go startCohort(s, rpcAddress)
 
-	return s, nil
+	return s
 }
 
 // Leader returns the current leader of the cluster
