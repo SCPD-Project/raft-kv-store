@@ -25,6 +25,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 			return f.applySet(command.Key, command.Value)
 		case raftpb.DEL:
 			return f.applyDelete(command.Key)
+
 		default:
 			panic(fmt.Sprintf("unrecognized command: %+v", command))
 		}
@@ -44,14 +45,14 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	}
 
 	return &fsmSnapshot{store: o, persistDBConn: f.persistKvDbConn, bucketName: f.persistBucketName,
-						logger: f.log}, nil
+		logger: f.log}, nil
 }
 
 // Restore stores the key-value store to a previous state.
 func (f *fsm) Restore(_ io.ReadCloser) error {
 	o := make(map[string]string)
 	o = f.restore()
-	f.log.Infof(" Snapshot restore from bucket: %s with kv-size: %s", f.persistBucketName, len(o))
+	f.log.Infof(" Snapshot restore from bucket: %s with kv-size: %d", f.persistBucketName, len(o))
 
 	// Set the state from the snapshot, no lock required according to
 	// Hashicorp docs.
@@ -89,10 +90,10 @@ func (f *fsm) applyTransaction(ops []*raftpb.Command) interface{} {
 }
 
 type fsmSnapshot struct {
-	store map[string]string
-	persistDBConn  *persistKvDB
-	bucketName  string
-	logger *log.Entry
+	store         map[string]string
+	persistDBConn *persistKvDB
+	bucketName    string
+	logger        *log.Entry
 }
 
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {

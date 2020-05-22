@@ -8,19 +8,18 @@
 package store
 
 import (
-	"fmt"
-	log "github.com/sirupsen/logrus"
-	"math/rand"
-	"net"
-	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
-	"github.com/RAFT-KV-STORE/raftpb"
-	"github.com/golang/protobuf/proto"
+	"github.com/RAFT-KV-STORE/common"
+
+	"fmt"
+
+	"os"
+	"sync"
+
 	"github.com/hashicorp/raft"
-	raftboltdb "github.com/hashicorp/raft-boltdb"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -30,16 +29,13 @@ const (
 	SnapshotPersistFile = "persistedKeyValues.db"
 )
 
-var (
-	SnapshotThreshold int
-	SnapshotInterval int
-)
-
 // Store is a simple key-value store, where all changes are made via Raft consensus.
 type Store struct {
 	ID          string
 	RaftDir     string
 	RaftAddress string
+
+	rpcAddress string
 
 	mu sync.Mutex
 	kv map[string]string // The key-value store for the system.
@@ -47,18 +43,17 @@ type Store struct {
 	transactionInProgress bool
 	t                     sync.Mutex
 
-	raft   *raft.Raft // The consensus mechanism
-	log	   *log.Entry
+	raft              *raft.Raft // The consensus mechanism
+	log               *log.Entry
 	persistBucketName string
 	persistKvDbConn   *persistKvDB // persistent store
 
 }
 
 // NewStore returns a new Store.
-func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string,
-	          bucketName string) *Store {
+func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSingle bool, rpcAddress string, bucketName string) *Store {
 	if nodeID == "" {
-		nodeID = "node-" + randNodeID(nodeIDLen)
+		nodeID = "node-" + common.RandNodeID(common.NodeIDLen)
 	}
 	if raftDir == "" {
 		raftDir = fmt.Sprintf("./%s", nodeID)
@@ -69,186 +64,27 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string,
 	if bucketName == "" {
 		bucketName = "bucket-" + nodeID
 	}
-	persistDbConn := newDBConn(filepath.Join(raftDir, nodeID + "-" + SnapshotPersistFile), bucketName, logger)
+	persistDbConn := newDBConn(filepath.Join(raftDir, nodeID+"-"+SnapshotPersistFile), bucketName, logger)
 
 	s := &Store{
-		ID:          nodeID,
-		RaftAddress: raftAddress,
-		RaftDir:     raftDir,
-		kv:          make(map[string]string),
-		log:      l,
-		persistKvDbConn: persistDbConn,
+		ID:                nodeID,
+		RaftAddress:       raftAddress,
+		RaftDir:           raftDir,
+		kv:                make(map[string]string),
+		log:               l,
+		rpcAddress:        rpcAddress,
+		persistKvDbConn:   persistDbConn,
 		persistBucketName: bucketName,
 	}
-	return s
-}
-
-func randNodeID(n int) string {
-	letters := []rune("abcdefghijklmnopqrstuvwxyz0123456789")
-	rand.Seed(time.Now().UnixNano())
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letters[rand.Intn(len(letters))]
-	}
-	return string(b)
-}
-
-// Open opens the store. If enableSingle is set, and there are no existing peers,
-// then this node becomes the first node, and therefore leader, of the cluster.
-func (s *Store) Open(enableSingle bool) {
-	// Setup Raft configuration.
-	config := raft.DefaultConfig()
-	// Override defaults with configured values
-	config.SnapshotThreshold = uint64(SnapshotThreshold)
-	config.SnapshotInterval = time.Duration(SnapshotInterval) * time.Second
-	config.LocalID = raft.ServerID(s.ID)
-
-	// Setup Raft communication.
-	var TCPAddress *net.TCPAddr
-	var transport *raft.NetworkTransport
-	var err error
-	var snapshots *raft.FileSnapshotStore
-	if TCPAddress, err = net.ResolveTCPAddr("tcp", s.RaftAddress); err != nil {
-		s.log.Fatalf("failed to resolve TCP address %s: %s", s.RaftAddress, err)
-	}
-	if transport, err = raft.NewTCPTransport(s.RaftAddress, TCPAddress, 3, 10*time.Second, os.Stderr); err != nil {
-		s.log.Fatalf("failed to make TCP transport on %s: %s", s.RaftAddress, err.Error())
-	}
-
-	// Create the snapshot store. This allows the Raft to truncate the log.
-	if snapshots, err = raft.NewFileSnapshotStore(s.RaftDir, retainSnapshotCount, os.Stderr); err != nil {
-		s.log.Fatalf("failed to create snapshot store at %s: %s", s.RaftDir, err.Error())
-	}
-
-	// Create the log store and stable store.
-	var logStore raft.LogStore
-	var stableStore raft.StableStore
-
-	boltDB, err := raftboltdb.NewBoltStore(filepath.Join(s.RaftDir, "raft.db"))
+	ra, err := common.SetupRaft((*fsm)(s), s.ID, s.RaftAddress, s.RaftDir, enableSingle)
 	if err != nil {
-		s.log.Fatalf("failed to create new bolt store: %s", err)
+		l.Fatalf("Unable to setup raft instance for kv store:%s", err)
 	}
-	logStore = boltDB
-	stableStore = boltDB
 
-	// Instantiate the Raft systems.
-	ra, err := raft.NewRaft(config, (*fsm)(s), logStore, stableStore, snapshots, transport)
-	if err != nil {
-		s.log.Fatalf("failed to create new raft: %s", err)
-	}
 	s.raft = ra
+	go startCohort(s, rpcAddress)
 
-	if enableSingle {
-		configuration := raft.Configuration{
-			Servers: []raft.Server{
-				{
-					ID:      config.LocalID,
-					Address: transport.LocalAddr(),
-				},
-			},
-		}
-		ra.BootstrapCluster(configuration)
-	}
-}
-
-// Get returns the value for the given key.
-func (s *Store) Get(key string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.log.Infof("Processing Get request %s", key)
-	val, ok := s.kv[key]
-	if !ok {
-		return "", fmt.Errorf("Key=%s does not exist", key)
-	}
-
-	return val, nil
-}
-
-// Set sets the value for the given key.
-func (s *Store) Set(key, value string) error {
-	if s.raft.State() != raft.Leader {
-		return raft.ErrNotLeader
-	}
-
-	s.log.Infof("Processing Set request: Key=%s Value=%s", key, value)
-	c := &raftpb.RaftCommand{
-		Commands: []*raftpb.Command{
-			{
-				Method: raftpb.SET,
-				Key:    key,
-				Value:  value,
-			},
-		},
-	}
-
-	b, err := proto.Marshal(c)
-	if err != nil {
-		return err
-	}
-
-	f := s.raft.Apply(b, raftTimeout)
-	return f.Error()
-}
-
-// Delete deletes the given key.
-func (s *Store) Delete(key string) error {
-	if s.raft.State() != raft.Leader {
-		return raft.ErrNotLeader
-	}
-	log.Printf("Processing Delete request: Key=%s", key)
-	if _, err := s.Get(key); err != nil {
-		return err
-	}
-	c := &raftpb.RaftCommand{
-		Commands: []*raftpb.Command{
-			{
-				Method: raftpb.DEL,
-				Key:    key,
-			},
-		},
-	}
-
-	b, err := proto.Marshal(c)
-	if err != nil {
-		return err
-	}
-
-	f := s.raft.Apply(b, raftTimeout)
-	return f.Error()
-}
-
-// Transaction atomically executes the transaction .
-func (s *Store) Transaction(ops []*raftpb.Command) error {
-	if s.raft.State() != raft.Leader {
-		s.log.Error(raft.ErrNotLeader)
-		return raft.ErrNotLeader
-	}
-
-	if s.transactionInProgress {
-		return fmt.Errorf("transaction in progress, try again")
-	}
-
-	s.t.Lock()
-	s.transactionInProgress = true
-	s.t.Unlock()
-
-	c := &raftpb.RaftCommand{
-		Commands: ops,
-	}
-
-	b, err := proto.Marshal(c)
-	if err != nil {
-		return err
-	}
-
-	f := s.raft.Apply(b, raftTimeout)
-
-	s.t.Lock()
-	s.transactionInProgress = false
-	s.t.Unlock()
-
-	return f.Error()
+	return s
 }
 
 // Leader returns the current leader of the cluster

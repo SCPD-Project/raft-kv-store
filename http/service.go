@@ -5,11 +5,13 @@ package http
 import (
 	"bytes"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"net"
 	"net/http"
 	"strings"
 
+	log "github.com/sirupsen/logrus"
+
+	"github.com/RAFT-KV-STORE/coordinator"
 	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/RAFT-KV-STORE/store"
 	"github.com/gogo/protobuf/proto"
@@ -17,19 +19,26 @@ import (
 
 // Service provides HTTP service.
 type Service struct {
-	addr string
-	ln   net.Listener
-	store *store.Store
-	log *log.Entry
+	addr        string
+	ln          net.Listener
+	log         *log.Entry
+	store       *store.Store
+	coordinator *coordinator.Coordinator
 }
 
-// New returns an uninitialized HTTP service.
-func NewService(logger *log.Logger, addr string, store *store.Store) *Service {
+// NewService returns an uninitialized HTTP service.
+func NewService(logger *log.Logger, addr string, store *store.Store, coordinator *coordinator.Coordinator) *Service {
+
 	l := logger.WithField("component", "http")
+	if store == nil && coordinator == nil {
+		log.Fatalf("Invalid config, either kv or coordinator has to be initialized")
+	}
+
 	return &Service{
-		addr:  addr,
-		store: store,
-		log: l,
+		addr:        addr,
+		store:       store,
+		coordinator: coordinator,
+		log:         l,
 	}
 }
 
@@ -54,8 +63,17 @@ func (s *Service) Start(joinHttpAddress string) {
 		}
 	}()
 
+	var raftAddress, id string
+	if s.store != nil {
+		raftAddress = s.store.RaftAddress
+		id = s.store.ID
+	} else {
+		raftAddress = s.coordinator.RaftAddress
+		id = s.coordinator.ID
+	}
+
 	if joinHttpAddress != "" {
-		msg := &raftpb.JoinMsg{RaftAddress: s.store.RaftAddress, ID: s.store.ID}
+		msg := &raftpb.JoinMsg{RaftAddress: raftAddress, ID: id}
 		b, err := proto.Marshal(msg)
 		if err != nil {
 			s.log.Fatalf("error when marshaling %+v", msg)
@@ -76,15 +94,23 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/key") {
-		s.handleKeyRequest(w, r)
-	} else if r.URL.Path == "/join" {
+
+	// all the requests except join go to co-ordinator.
+	if r.URL.Path == "/join" {
 		s.handleJoin(w, r)
-	} else if strings.HasPrefix(r.URL.Path, "/leader") {
-		s.handleLeader(w, r)
-	} else if strings.HasPrefix(r.URL.Path, "/transaction") {
-		s.handleTransaction(w, r)
-	} else {
-		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	s.log.Infof("Serving request for path: %s\n", r.URL.Path)
+	if s.coordinator != nil {
+		if strings.HasPrefix(r.URL.Path, "/key") {
+			s.handleKeyRequest(w, r)
+		} else if strings.HasPrefix(r.URL.Path, "/leader") {
+			s.handleLeader(w, r)
+		} else if strings.HasPrefix(r.URL.Path, "/transaction") {
+			s.handleTransaction(w, r)
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+		}
 	}
 }
