@@ -6,7 +6,7 @@ require (
 	github.com/antonfisher/nested-logrus-formatter v1.1.0
 	github.com/boltdb/bolt v1.3.1
 	github.com/gogo/protobuf v1.3.1
-	github.com/golang/protobuf v1.4.0
+	github.com/golang/protobuf v1.3.3
 	github.com/hashicorp/raft v1.1.2
 	github.com/hashicorp/raft-boltdb v0.0.0-20191021154308-4207f1bf0617
 	github.com/jinzhu/copier v0.0.0-20190924061706-b57f9002281a
