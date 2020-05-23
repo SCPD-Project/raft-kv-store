@@ -44,7 +44,7 @@ func startCohort(store *Store, listenAddress string) {
 		log.Fatal("listen error:", err)
 	}
 	go http.Serve(listener, nil)
-	c.store.log.Info("RPC server started successfully")
+	c.store.log.Infof("RPC server started successfully on :%s", listenAddress)
 
 	// setup raft for cohort
 }
@@ -179,4 +179,11 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 
 	}
 	return nil
+}
+
+// ProcessJoin processes join message.
+// TODO: Use this to join cohort raft as well.
+func (c *Cohort) ProcessJoin(joinMsg *raftpb.JoinMsg, reply *common.RPCResponse) error {
+
+	return c.store.Join(joinMsg.ID, joinMsg.RaftAddress)
 }

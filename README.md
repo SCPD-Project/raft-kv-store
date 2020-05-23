@@ -12,16 +12,16 @@ make build
 
 ## Start KV Shard-1
 ```
-bin/kv -i node-0 -l :11000 -r :12000 -p :13000
-bin/kv -i node-1 -l :11001 -r :12001 -j :11000 -p :13001
-bin/kv -i node-2 -l :11002 -r :12002 -j :11000 -p :13002
+bin/kv -i node-0 -l :11000 -r :12000
+bin/kv -i node-1 -l :11001 -r :12001 -j :11000 
+bin/kv -i node-2 -l :11002 -r :12002 -j :11000
 ```
 
 ## Start KV Shard-2
 ```
-bin/kv -i node-3 -l :15000 -r :16000 -p :14000
-bin/kv -i node-4 -l :15001 -r :16001 -j :16000 -p :14001
-bin/kv -i node-5 -l :15002 -r :16002 -j :16000 -p :14002
+bin/kv -i node-3 -l :15000 -r :16000
+bin/kv -i node-4 -l :15001 -r :16001 -j :16000 
+bin/kv -i node-5 -l :15002 -r :16002 -j :16000
 ```
 
 ## Start Coordinator (Only 1 for now)

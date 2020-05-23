@@ -44,6 +44,7 @@ func SetupRaft(fsm raft.FSM, id, raftAddress, raftDir string, enableSingle bool)
 	config.SnapshotThreshold = uint64(SnapshotThreshold)
 	config.SnapshotInterval = time.Duration(SnapshotInterval) * time.Second
 	config.LocalID = raft.ServerID(id)
+	config.LogLevel = "INFO"
 
 	// Setup Raft communication.
 	var TCPAddress *net.TCPAddr
