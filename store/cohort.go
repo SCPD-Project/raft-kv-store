@@ -15,14 +15,6 @@ import (
 	"github.com/hashicorp/raft"
 )
 
-type KeyNotFoundError struct {
-	key string
-}
-
-func (e *KeyNotFoundError) Error() string {
-	return fmt.Sprintf("no such key found: %v", e.key)
-}
-
 // Cohort maintains state of the cohort state machine. It also starts
 // a rpc server to listen to commands from coordinator.
 type Cohort struct {
@@ -61,8 +53,7 @@ func (c* Cohort) ValidateKeyExists(key string)(value string, err error) {
 	value, ok := c.store.kv[key]
 	if !ok {
 		c.store.log.Infof(" Key %s not found ", key)
-		keyNotFound := &KeyNotFoundError{key: key}
-		return "", fmt.Errorf( "%w", keyNotFound)
+		return "", fmt.Errorf( "key: %s not found", key)
 	}
 
 	return value, nil

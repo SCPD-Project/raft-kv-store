@@ -307,11 +307,51 @@ func (c *raftKVClient) Delete(key string) error {
 	return errors.New(string(body))
 }
 
+func (c *raftKVClient) OptimizeTxnCommands() (txnJson httpd.TxnJSON) {
+	cmdMap := make(map[string]map[string]httpd.TxnCommand)
+	for _, cmd := range c.txnCmds.Commands {
+		switch cmd.Command {
+		case raftpb.SET:
+			value, ok := cmdMap[cmd.Key]; if !ok {
+				newMap := make(map[string]httpd.TxnCommand)
+				newMap[cmd.Command] = cmd
+				cmdMap[cmd.Key] = newMap
+			} else {
+				value[cmd.Command] = cmd
+			}
+		case raftpb.DEL:
+			_, ok := cmdMap[cmd.Key]; if ok {
+				delete(cmdMap, cmd.Key)
+			} else {
+				newMap := make(map[string]httpd.TxnCommand)
+				newMap[cmd.Command] = cmd
+				cmdMap[cmd.Key] = newMap
+			}
+		}
+	}
+
+	newTxnCmds := httpd.TxnJSON{}
+	for _, txnCmdMap := range cmdMap {
+		for _, value := range txnCmdMap {
+			newTxnCmds.Commands = append(newTxnCmds.Commands, value)
+		}
+	}
+
+	return newTxnCmds
+}
+
 func (c *raftKVClient) Transaction() error{
 	fmt.Printf("Sumbitting %s\n", c.txnCmds)
 	var reqBody []byte
 	var err error
-	if reqBody, err = json.Marshal(c.txnCmds); err != nil {
+
+	txnJsonCmds := c.OptimizeTxnCommands(); if len(txnJsonCmds.Commands) == 0  {
+		fmt.Println(" No effect because of this txn and " +
+			"so not sending it to server")
+		return nil
+	}
+
+	if reqBody, err = json.Marshal(txnJsonCmds); err != nil {
 		return err
 	}
 	resp, err := c.newTxnRequest(reqBody)

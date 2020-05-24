@@ -32,6 +32,11 @@ jobs:
           source $BASH_ENV
           make proto
           make build
+      - run:
+          name: Client tests
+        command: |
+          cd client
+          go test
       - save_cache: # Store cache in the /go/pkg directory
           key: go-mod-v1-{{ .Branch }}
           paths:
