@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"net/rpc"
 
-	"github.com/rs/xid"
-
 	"github.com/RAFT-KV-STORE/common"
 	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/rs/xid"
 )
 
 // TODO: Separate out the common code into a function
@@ -137,7 +136,7 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 		c.log.Infof("[txid %s] Aborting\n", txid)
 		gt.Phase = common.Abort
 		// replicate via raft
-		c.cstate[txid] = gt
+		c.txMap[txid] = gt
 
 		for _, shardops := range gt.ShardToCommands {
 			shardops.Phase = common.Abort
@@ -151,7 +150,7 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	c.log.Infof("[txid: %s] Prepared recieved: %d Prepared Expected: %d", txid, prepareResponses, numShards)
 	// c.log the prepared phase and replicate it
 	gt.Phase = common.Prepared
-	c.cstate[txid] = gt
+	c.txMap[txid] = gt
 
 	// TODO(imp):if the above replication fails via raft,
 	// this usually means majority of nodes in the coordinator
@@ -162,7 +161,7 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	var commitResponses int
 	for _, shardOps := range gt.ShardToCommands {
 		// Relicate via Raft
-		c.cstate[txid].Phase = common.Commit
+		c.txMap[txid].Phase = common.Commit
 		shardOps.Phase = common.Commit
 		if c.SendMessageToShard(shardOps) {
 			commitResponses++
@@ -173,7 +172,7 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	// TODO (not important): this can be garbage collected in a separate go-routine, once all acks have
 	// been recieved
 	gt.Phase = common.Committed
-	c.cstate[txid] = gt
+	c.txMap[txid] = gt
 
 	// wait for all acks since client should complete replication as
 	// well. not required.

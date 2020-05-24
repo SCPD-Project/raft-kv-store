@@ -8,24 +8,18 @@
 package store
 
 import (
+	"fmt"
+	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/RAFT-KV-STORE/common"
-
-	"fmt"
-
-	"os"
-	"sync"
-
 	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"
 )
 
 const (
-	retainSnapshotCount = 2
-	raftTimeout         = 10 * time.Second
-	nodeIDLen           = 5
 	SnapshotPersistFile = "persistedKeyValues.db"
 )
 
@@ -59,7 +53,7 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSin
 		raftDir = fmt.Sprintf("./%s", nodeID)
 	}
 	l := logger.WithField("component", "store")
-	l.Infof("Preparing node-%s with persistent diretory %s, raftAddress %s", nodeID, raftDir, raftAddress)
+	l.Infof("Preparing node-%s with persistent directory %s, raftAddress %s", nodeID, raftDir, raftAddress)
 	os.MkdirAll(raftDir, 0700)
 	if bucketName == "" {
 		bucketName = "bucket-" + nodeID

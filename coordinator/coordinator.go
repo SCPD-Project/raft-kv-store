@@ -11,7 +11,6 @@ import (
 	"github.com/RAFT-KV-STORE/config"
 	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/golang/protobuf/proto"
-
 	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"
 )
@@ -26,8 +25,8 @@ type Coordinator struct {
 
 	// coordinator state - This has to be replicated.
 	// TODO: concurrent transactions
-	cstate map[string]*common.GlobalTransaction
-	m      sync.Mutex
+	txMap map[string]*common.GlobalTransaction
+	m     sync.Mutex
 
 	// ShardToPeers need to be populated based on a config.
 	// If time permits, these can be auto-discovered.
@@ -37,8 +36,8 @@ type Coordinator struct {
 	log    *log.Entry
 }
 
-// New initailises the new co-ordinator instance
-func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSingle bool, shardInfo *config.ShardsConfig) *Coordinator {
+// New initialises the new coordinator instance
+func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSingle bool) *Coordinator {
 
 	if nodeID == "" {
 		nodeID = "node-" + common.RandNodeID(common.NodeIDLen)
@@ -46,12 +45,16 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 	if raftDir == "" {
 		raftDir = fmt.Sprintf("./%s", nodeID)
 	}
-	l := logger.WithField("component", "coordinator")
-	l.Infof("Preparing node-%s with persistent directory %s, raftAddress %s", nodeID, raftDir, raftAddress)
+	log := logger.WithField("component", "coordinator")
+	log.Infof("Preparing node-%s with persistent directory %s, raftAddress %s", nodeID, raftDir, raftAddress)
 	os.MkdirAll(raftDir, 0700)
 
+	shardsInfo, err :=  config.GetShards()
+	if err!= nil {
+		log.Fatal(err)
+	}
 	shardToPeers := make(map[int][]string)
-	for i, shard := range shardInfo.Shards {
+	for i, shard := range shardsInfo.Shards {
 		shardToPeers[i] = append(shardToPeers[i], shard...)
 	}
 
@@ -61,13 +64,13 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 		RaftDir:     raftDir,
 
 		ShardToPeers: shardToPeers,
-		cstate:       make(map[string]*common.GlobalTransaction),
-		log:          l,
+		txMap:        make(map[string]*common.GlobalTransaction),
+		log:          log,
 	}
 
 	ra, err := common.SetupRaft((*fsm)(c), c.ID, c.RaftAddress, c.RaftDir, enableSingle)
 	if err != nil {
-		l.Fatalf("Unable to setup raft instance for kv store:%s", err)
+		log.Fatalf("Unable to setup raft instance for kv store:%s", err)
 	}
 
 	c.raft = ra
