@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/RAFT-KV-STORE/common"
 	"github.com/hashicorp/raft"
