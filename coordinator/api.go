@@ -64,12 +64,10 @@ func (c *Coordinator) Set(key, value string) error {
 
 	client, err := rpc.DialHTTP("tcp", addr)
 	if err != nil {
-		c.log.Fatal("dialing:", err)
+		return fmt.Errorf("Unable to reach shard at :%s", addr)
 	}
 
-	err = client.Call("Cohort.ProcessCommands", cmd, &response)
-
-	return nil
+	return client.Call("Cohort.ProcessCommands", cmd, &response)
 
 }
 
@@ -98,9 +96,7 @@ func (c *Coordinator) Delete(key string) error {
 		return err
 	}
 
-	err = client.Call("Cohort.ProcessCommands", cmd, &response)
-	return err
-
+	return client.Call("Cohort.ProcessCommands", cmd, &response)
 }
 
 // Transaction atomically executes the transaction .

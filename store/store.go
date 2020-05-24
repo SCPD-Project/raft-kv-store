@@ -9,11 +9,13 @@ package store
 
 import (
 	"fmt"
+	"net/rpc"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/RAFT-KV-STORE/common"
+	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"
 )
@@ -69,15 +71,36 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSin
 		persistKvDbConn:   persistDbConn,
 		persistBucketName: bucketName,
 	}
+
 	ra, err := common.SetupRaft((*fsm)(s), s.ID, s.RaftAddress, s.RaftDir, enableSingle)
 	if err != nil {
 		l.Fatalf("Unable to setup raft instance for kv store:%s", err)
 	}
-
 	s.raft = ra
 	go startCohort(s, rpcAddress)
-
 	return s
+}
+
+// Start ...
+func (s *Store) Start(joinHTTPAddress, id string) {
+
+	// no op if you are leader
+	if joinHTTPAddress == "" {
+		return
+	}
+	var response common.RPCResponse
+	msg := &raftpb.JoinMsg{RaftAddress: s.RaftAddress, ID: id}
+
+	client, err := rpc.DialHTTP("tcp", joinHTTPAddress)
+	if err != nil {
+		s.log.Fatalf("Unable to reach leader: %s", err)
+	}
+
+	err = client.Call("Cohort.ProcessJoin", msg, &response)
+	if err != nil {
+		s.log.Fatalf("Unable to join cluster: %s", err)
+
+	}
 }
 
 // Leader returns the current leader of the cluster

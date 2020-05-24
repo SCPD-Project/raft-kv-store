@@ -22,7 +22,6 @@ import (
 const (
 	DefaultListenAddress = "localhost:11000"
 	DefaultRaftAddress   = "localhost:12000"
-	DefaultRPCAddress    = "localhost:13000"
 
 	DefaultCoordinatorListenAddress = "localhost:21000"
 	DefaultCoordinatorRaftAddress   = "localhost:22000"
@@ -42,7 +41,6 @@ var (
 
 func init() {
 	flag.StringVarP(&listenAddress, "listen", "l", DefaultListenAddress, "Set the server listen address")
-	flag.StringVarP(&rpcAddress, "rpc", "p", DefaultRPCAddress, "Set the rpc address")
 
 	flag.StringVarP(&raftAddress, "raft", "r", DefaultRaftAddress, "Set the RAFT binding address")
 	flag.StringVarP(&joinHTTPAddress, "join", "j", "", "Set joining HTTP address, if any")
@@ -80,13 +78,13 @@ func main() {
 
 	if isCoordinator {
 		c := coordinator.NewCoordinator(logger, nodeID, raftDir, raftAddress, joinHTTPAddress == "")
-		h := httpd.NewService(logger, listenAddress, nil, c)
+		h := httpd.NewService(logger, listenAddress, c)
 		h.Start(joinHTTPAddress)
 	} else {
 		// need to start rpc server
-		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", rpcAddress, bucketName)
-		h := httpd.NewService(logger, listenAddress, kv, nil)
-		h.Start(joinHTTPAddress)
+		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", listenAddress, bucketName)
+		kv.Start(joinHTTPAddress, nodeID)
+
 	}
 
 	log.Info("raftd started successfully")

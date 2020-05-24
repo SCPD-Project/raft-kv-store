@@ -41,17 +41,11 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.store != nil {
-		if err := s.store.Join(joinMsg.ID, joinMsg.RaftAddress); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	} else {
-		if err := s.coordinator.Join(joinMsg.ID, joinMsg.RaftAddress); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
+	if err := s.coordinator.Join(joinMsg.ID, joinMsg.RaftAddress); err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
+
 }
 
 func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
@@ -138,14 +132,14 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// handleLeader mainly used for debugs.
-func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request) {
+// TODO: No raft leader api exposed in coordinator
+// // handleLeader mainly used for debugs.
+// func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request) {
 
-	s.log.Debug("Handling request for leader")
-	if s.store != nil {
-		io.WriteString(w, string(s.store.Leader()))
-	}
-}
+// 	s.log.Debug("Handling request for leader")
+// 	io.WriteString(w, string(s.coordinator.Leader()))
+
+// }
 
 // handleTransaction
 func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
