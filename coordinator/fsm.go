@@ -6,7 +6,6 @@ import (
 	"io"
 
 	"github.com/RAFT-KV-STORE/common"
-
 	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
@@ -39,13 +38,13 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		if err != nil {
 			return fmt.Errorf("log entry corrupted")
 		}
-		f.cstate[command.Key] = &gt
+		f.txMap[command.Key] = &gt
 
 	case raftpb.DEL:
 		f.m.Lock()
 		defer f.m.Unlock()
 
-		delete(f.cstate, command.Key)
+		delete(f.txMap, command.Key)
 	default:
 		panic(fmt.Sprintf("unrecognized command: %+v", command))
 	}
@@ -59,7 +58,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	defer f.m.Unlock()
 
 	o := make(map[string]*common.GlobalTransaction)
-	for k, v := range f.cstate {
+	for k, v := range f.txMap {
 		gt := &common.GlobalTransaction{}
 		copier.Copy(gt, v)
 		o[k] = gt
@@ -76,7 +75,7 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 		return err
 	}
 
-	f.cstate = o
+	f.txMap = o
 	return nil
 }
 

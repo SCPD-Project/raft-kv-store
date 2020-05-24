@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/RAFT-KV-STORE/common"
-	"github.com/RAFT-KV-STORE/config"
 	httpd "github.com/RAFT-KV-STORE/http"
 	"github.com/RAFT-KV-STORE/store"
 	nested "github.com/antonfisher/nested-logrus-formatter"
@@ -31,16 +30,14 @@ const (
 
 // Command line parameters
 var (
-	listenAddress     string
-	raftAddress       string
-	rpcAddress        string
-	joinHTTPAddress   string
-	raftDir           string
-	nodeID            string
-	snapshotInterval  int
-	snapshotThreshold int
-	bucketName        string
-	clustermanager    bool
+	listenAddress   string
+	raftAddress     string
+	rpcAddress      string
+	joinHTTPAddress string
+	raftDir         string
+	nodeID          string
+	bucketName      string
+	isCoordinator   bool
 )
 
 func init() {
@@ -51,13 +48,13 @@ func init() {
 	flag.StringVarP(&joinHTTPAddress, "join", "j", "", "Set joining HTTP address, if any")
 	flag.StringVarP(&nodeID, "id", "i", "", "Node ID, randomly generated if not set")
 	flag.StringVarP(&raftDir, "dir", "d", "", "Raft directory, ./$(nodeID) if not set")
-	flag.IntVarP(&snapshotInterval, "snapshotinterval", "", 30,
+	flag.IntVarP(&common.SnapshotInterval, "snapshotinterval", "", 30,
 		"Snapshot interval in seconds, 30 seconds if not set")
-	flag.IntVarP(&snapshotThreshold, "snapshotthreshold", "", 5,
+	flag.IntVarP(&common.SnapshotThreshold, "snapshotthreshold", "", 5,
 		"snapshot threshold of log indices, 5 if not set")
 	flag.StringVarP(&bucketName, "bucketName/shard", "b", "", "Bucket name, randomly"+
 		"generated if not set")
-	flag.BoolVarP(&clustermanager, "clustermanager", "c", false, "Start as co-ordinator")
+	flag.BoolVarP(&isCoordinator, "coordinator", "c", false, "Start as coordinator")
 
 	flag.Usage = func() {
 		log.Errorf("Usage: %s [options]\n", os.Args[0])
@@ -78,37 +75,23 @@ func main() {
 		},
 		CallerFirst: true,
 	})
-
 	logger.SetReportCaller(true)
+	log := logger.WithField("component", "main")
 
-	common.SnapshotInterval = snapshotInterval
-	common.SnapshotThreshold = snapshotThreshold
-
-	if clustermanager {
-
-		shardInfo, err := config.GetShards()
-		if err != nil {
-			log.Fatalf("unable to get shard info: %s", shardInfo)
-		}
-		c := coordinator.NewCoordinator(logger, nodeID, raftDir, raftAddress, joinHTTPAddress == "", shardInfo)
-
+	if isCoordinator {
+		c := coordinator.NewCoordinator(logger, nodeID, raftDir, raftAddress, joinHTTPAddress == "")
 		h := httpd.NewService(logger, listenAddress, nil, c)
 		h.Start(joinHTTPAddress)
-
-		logger.WithField("component", "main").Info("raftd started successfully")
 	} else {
-
 		// need to start rpc server
 		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", rpcAddress, bucketName)
-
 		h := httpd.NewService(logger, listenAddress, kv, nil)
 		h.Start(joinHTTPAddress)
-
-		logger.WithField("component", "main").Info("raftd started successfully")
 	}
 
+	log.Info("raftd started successfully")
 	terminate := make(chan os.Signal, 1)
 	signal.Notify(terminate, os.Interrupt)
 	<-terminate
-	logger.WithField("component", "main").Info("raftd exiting")
+	log.Info("raftd exiting")
 }
