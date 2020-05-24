@@ -26,7 +26,7 @@ type Cohort struct {
 	// replicate cohort state
 	// txid -> tx cmds for this cohort(shard)
 	// TODO come up with a better name
-	cState map[string]*common.ShardOps
+	opsMap map[string]*common.ShardOps
 	// TODO use lock per key
 	mu sync.Mutex
 }
@@ -35,7 +35,7 @@ func startCohort(store *Store, listenAddress string) {
 
 	c := &Cohort{
 		store:  store,
-		cState: make(map[string]*common.ShardOps),
+		opsMap: make(map[string]*common.ShardOps),
 	}
 	rpc.Register(c)
 	rpc.HandleHTTP()
@@ -118,7 +118,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 		ops.Phase = common.Prepared
 		// This should be replicated via raft with raft Apply, once setup
 		// if raft fails, send NotPrepared. log 2 pc message
-		c.cState[ops.Txid] = ops
+		c.opsMap[ops.Txid] = ops
 
 		// lock is held above
 		c.store.transactionInProgress = true
@@ -132,7 +132,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 		c.mu.Lock()
 		defer c.mu.Unlock()
 
-		if c.cState[ops.Txid].Phase != common.Prepared {
+		if c.opsMap[ops.Txid].Phase != common.Prepared {
 			// this should never happen
 			*reply = common.RPCResponse{
 				Status: -1,
@@ -143,7 +143,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 
 		// log 2 pc commit message, replicate via raft
 		ops.Phase = common.Committed
-		c.cState[ops.Txid] = ops
+		c.opsMap[ops.Txid] = ops
 
 		// Apply to kv
 		b, err := proto.Marshal(ops.Cmds)
@@ -170,7 +170,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 
 		// log 2 pc abort message, replicate via raft
 		// this should be set operation on raft
-		c.cState[ops.Txid].Phase = common.Abort
+		c.opsMap[ops.Txid].Phase = common.Abort
 		c.store.transactionInProgress = false
 		*reply = common.RPCResponse{
 			Status: 0,
