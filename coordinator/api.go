@@ -38,7 +38,11 @@ func (c *Coordinator) Get(key string) (string, error) {
 
 	err = client.Call("Cohort.ProcessCommands", cmd, &response)
 
-	return response.Value, nil
+	if err != nil {
+		c.log.Infof(" Key not found: Coordinator ")
+	}
+
+	return response.Value, err
 
 }
 
@@ -78,6 +82,10 @@ func (c *Coordinator) Delete(key string) error {
 
 	c.log.Infof("Processing Delete request %s", key)
 	var response common.RPCResponse
+	// Check with
+	if _, err := c.Get(key); err != nil {
+		return err
+	}
 	cmd := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{

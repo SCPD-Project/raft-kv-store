@@ -59,9 +59,15 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.
 		command := raftCommand.Commands[0]
 		switch command.Method {
 		case raftpb.GET:
-			*reply = common.RPCResponse{
-				Status: 0,
-				Value:  c.store.kv[command.Key],
+			_, ok := c.store.kv[command.Key]
+			if !ok {
+				c.store.log.Info(" Key %s not found ", command.Key)
+				return fmt.Errorf(" Key not found %s ", command.Key)
+			} else {
+				*reply = common.RPCResponse{
+					Status: 0,
+					Value:  c.store.kv[command.Key],
+				}
 			}
 			return nil
 
