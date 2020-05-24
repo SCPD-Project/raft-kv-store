@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/RAFT-KV-STORE/store"
 	"io"
 	"io/ioutil"
 	"net"
@@ -71,8 +72,12 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		val, err := s.coordinator.Get(key)
 		if err != nil {
-			io.WriteString(w, err.Error()+"\n")
-			w.WriteHeader(http.StatusInternalServerError)
+			switch err.(type) {
+			case *store.KeyNotFoundError:
+				w.WriteHeader(http.StatusBadRequest)
+			default:
+				w.WriteHeader(http.StatusInternalServerError)
+			}
 			msg = err.Error()
 		} else {
 			w.WriteHeader(http.StatusOK)
@@ -109,11 +114,19 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		if key == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			msg = "key is missing"
-		} else if err := s.coordinator.Delete(key); err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			msg = err.Error()
 		} else {
-			w.WriteHeader(http.StatusOK)
+			err := s.coordinator.Delete(key)
+			if err != nil {
+				switch err.(type) {
+				case *store.KeyNotFoundError:
+					w.WriteHeader(http.StatusBadRequest)
+				default:
+					w.WriteHeader(http.StatusInternalServerError)
+				}
+				msg = err.Error()
+			} else {
+				w.WriteHeader(http.StatusOK)
+			}
 		}
 		io.WriteString(w, msg)
 	default:

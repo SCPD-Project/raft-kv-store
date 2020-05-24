@@ -15,6 +15,14 @@ import (
 	"github.com/hashicorp/raft"
 )
 
+type KeyNotFoundError struct {
+	key string
+}
+
+func (e *KeyNotFoundError) Error() string {
+	return fmt.Sprintf("no such key found: %v", e.key)
+}
+
 // Cohort maintains state of the cohort state machine. It also starts
 // a rpc server to listen to commands from coordinator.
 type Cohort struct {
@@ -49,27 +57,36 @@ func startCohort(store *Store, listenAddress string) {
 	// setup raft for cohort
 }
 
+func (c* Cohort) ValidateKeyExists(key string)(value string, err error) {
+	value, ok := c.store.kv[key]
+	if !ok {
+		c.store.log.Infof(" Key %s not found ", key)
+		keyNotFound := &KeyNotFoundError{key: key}
+		return "", fmt.Errorf( "%w", keyNotFound)
+	}
+
+	return value, nil
+}
+
 // ProcessCommands will process simple Get/Set (non-transactional) cmds from
 // the coordinator.
 func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.RPCResponse) error {
 
 	// No need to go to raft for Get/Leader cmds
-	c.store.log.Info("Processing rpc call", raftCommand)
+	c.store.log.Info("Processing rpc call: ", raftCommand)
 	if len(raftCommand.Commands) == 1 {
 		command := raftCommand.Commands[0]
 		switch command.Method {
 		case raftpb.GET:
-			_, ok := c.store.kv[command.Key]
-			if !ok {
-				c.store.log.Info(" Key %s not found ", command.Key)
-				return fmt.Errorf(" Key not found %s ", command.Key)
+			value, err := c.ValidateKeyExists(command.Key); if err != nil {
+				return err
 			} else {
 				*reply = common.RPCResponse{
 					Status: 0,
-					Value:  c.store.kv[command.Key],
+					Value:  value,
 				}
+				return nil
 			}
-			return nil
 
 		case raftpb.LEADER:
 
@@ -86,6 +103,11 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.
 			}
 
 			return nil
+		case raftpb.DEL:
+
+			_, err := c.ValidateKeyExists(command.Key); if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -108,13 +130,30 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 		// If transaction is already in progress, prepare should return "No"
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		if c.store.transactionInProgress {
-			*reply = common.RPCResponse{
-				// TODO: use different status codes to give appropriate
-				// error to co-ordinator. For now, -1 is failure
-				Status: -1,
-				Value:  string(common.NotPrepared),
+
+		var keyExists = true
+		// 1. If there is a valid key already existing before del, return true
+		// 2. If there is a valid set for the key in this txn.
+		cmdMap := make(map[string]string)
+		for _, cmd := range ops.Cmds.Commands {
+			switch cmd.Method {
+			case raftpb.SET:
+				cmdMap[cmd.Key] = raftpb.SET
+			case raftpb.DEL:
+				_, keyExists = c.store.kv[cmd.Key]
+				if !keyExists {
+					keyExists = true
+					_, ok := cmdMap[cmd.Key]; if !ok {
+						keyExists = false
+						break
+					}
+				}
 			}
+		}
+
+		if c.store.transactionInProgress || !keyExists {
+			c.opsMap[ops.Txid] = ops
+			c.opsMap[ops.Txid].Phase = common.NotPrepared
 			// no need to update cohort state machine, it is equivalent
 			// to a no transaction.
 			return fmt.Errorf("Not prepared")
