@@ -147,6 +147,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 						keyExists = false
 						break
 					}
+					delete(cmdMap, cmd.Key)
 				}
 			}
 		}
