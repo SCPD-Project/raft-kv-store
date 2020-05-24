@@ -13,7 +13,6 @@ import (
 
 	"github.com/RAFT-KV-STORE/coordinator"
 	"github.com/RAFT-KV-STORE/raftpb"
-	"github.com/RAFT-KV-STORE/store"
 	"github.com/gogo/protobuf/proto"
 )
 
@@ -22,28 +21,23 @@ type Service struct {
 	addr        string
 	ln          net.Listener
 	log         *log.Entry
-	store       *store.Store
 	coordinator *coordinator.Coordinator
 }
 
 // NewService returns an uninitialized HTTP service.
-func NewService(logger *log.Logger, addr string, store *store.Store, coordinator *coordinator.Coordinator) *Service {
+func NewService(logger *log.Logger, addr string, coordinator *coordinator.Coordinator) *Service {
 
 	l := logger.WithField("component", "http")
-	if store == nil && coordinator == nil {
-		log.Fatalf("Invalid config, either kv or coordinator has to be initialized")
-	}
 
 	return &Service{
 		addr:        addr,
-		store:       store,
 		coordinator: coordinator,
 		log:         l,
 	}
 }
 
 // Start starts the service.
-func (s *Service) Start(joinHttpAddress string) {
+func (s *Service) Start(joinHTTPAddress string) {
 	server := http.Server{
 		Handler: s,
 	}
@@ -64,23 +58,18 @@ func (s *Service) Start(joinHttpAddress string) {
 	}()
 
 	var raftAddress, id string
-	if s.store != nil {
-		raftAddress = s.store.RaftAddress
-		id = s.store.ID
-	} else {
-		raftAddress = s.coordinator.RaftAddress
-		id = s.coordinator.ID
-	}
+	raftAddress = s.coordinator.RaftAddress
+	id = s.coordinator.ID
 
-	if joinHttpAddress != "" {
+	if joinHTTPAddress != "" {
 		msg := &raftpb.JoinMsg{RaftAddress: raftAddress, ID: id}
 		b, err := proto.Marshal(msg)
 		if err != nil {
 			s.log.Fatalf("error when marshaling %+v", msg)
 		}
-		resp, err := http.Post(fmt.Sprintf("http://%s/join", joinHttpAddress), "application/protobuf", bytes.NewBuffer(b))
+		resp, err := http.Post(fmt.Sprintf("http://%s/join", joinHTTPAddress), "application/protobuf", bytes.NewBuffer(b))
 		if err != nil {
-			s.log.Fatalf("failed to join %s: %s", joinHttpAddress, err)
+			s.log.Fatalf("failed to join %s: %s", joinHTTPAddress, err)
 		}
 		defer resp.Body.Close()
 	}
@@ -95,22 +84,14 @@ func (s *Service) Close() {
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	// all the requests except join go to co-ordinator.
-	if r.URL.Path == "/join" {
-		s.handleJoin(w, r)
-		return
-	}
-
 	s.log.Infof("Serving request for path: %s\n", r.URL.Path)
-	if s.coordinator != nil {
-		if strings.HasPrefix(r.URL.Path, "/key") {
-			s.handleKeyRequest(w, r)
-		} else if strings.HasPrefix(r.URL.Path, "/leader") {
-			s.handleLeader(w, r)
-		} else if strings.HasPrefix(r.URL.Path, "/transaction") {
-			s.handleTransaction(w, r)
-		} else {
-			w.WriteHeader(http.StatusNotFound)
-		}
+	if strings.HasPrefix(r.URL.Path, "/key") {
+		s.handleKeyRequest(w, r)
+	} else if strings.HasPrefix(r.URL.Path, "/transaction") {
+		s.handleTransaction(w, r)
+	} else if r.URL.Path == "/join" {
+		s.handleJoin(w, r)
+	} else {
+		w.WriteHeader(http.StatusNotFound)
 	}
 }
