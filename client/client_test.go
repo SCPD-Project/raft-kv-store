@@ -12,13 +12,13 @@ func (c *raftKVClient) appendTestCmds(method, key string, value ...string) {
 	case raftpb.SET:
 		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
 			Command: method,
-			Key: key,
-			Value: value[0],
+			Key:     key,
+			Value:   value[0],
 		})
 	case raftpb.DEL:
 		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
 			Command: method,
-			Key: key,
+			Key:     key,
 		})
 	}
 }
@@ -99,7 +99,7 @@ func TestClient(t *testing.T) {
 	test5TxnCmds := c.OptimizeTxnCommands().Commands
 
 	// for validating order of txns
-	test5ExpectedOutputCmds := []httpd.TxnCommand {
+	test5ExpectedOutputCmds := []httpd.TxnCommand{
 		{
 			Command: raftpb.DEL,
 			Key:     "a",
@@ -151,7 +151,7 @@ func TestClient(t *testing.T) {
 	c.appendTestCmds(raftpb.SET, "a", "25")
 	c.appendTestCmds(raftpb.SET, "b", "30")
 	test7TxnCmds := c.OptimizeTxnCommands().Commands
-	test7ExpectedOutputCmds := []httpd.TxnCommand {
+	test7ExpectedOutputCmds := []httpd.TxnCommand{
 		{
 			Command: raftpb.SET,
 			Key:     "a",

@@ -20,36 +20,36 @@ import (
 	"github.com/RAFT-KV-STORE/raftpb"
 )
 
-var(
+var (
 	CmdRegex = regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)\n`)
 )
 
-func addURLScheme(s string) string{
+func addURLScheme(s string) string {
 	if strings.HasPrefix(s, "https://") {
 		s = strings.Replace(s, "https://", "http://", 1)
 		return s
 	} else if !strings.HasPrefix(s, "http://") {
-		return  "http://" + s
+		return "http://" + s
 	}
 	return s
 }
 
-type raftKVClient struct{
-	client *http.Client
+type raftKVClient struct {
+	client     *http.Client
 	serverAddr string
 	// TODO: Add stop API to avoid exposing Terminate channel
 	Terminate chan os.Signal
-	reader *bufio.Reader
-	inTxn bool
-	txnCmds httpd.TxnJSON
+	reader    *bufio.Reader
+	inTxn     bool
+	txnCmds   httpd.TxnJSON
 }
 
-func NewRaftKVClient(serverAddr string) *raftKVClient{
+func NewRaftKVClient(serverAddr string) *raftKVClient {
 	c := &raftKVClient{
-		client: &http.Client{Timeout: 5 * time.Second},
+		client:     &http.Client{Timeout: 5 * time.Second},
 		serverAddr: addURLScheme(serverAddr),
-		Terminate : make(chan os.Signal, 1),
-		reader: bufio.NewReader(os.Stdin),
+		Terminate:  make(chan os.Signal, 1),
+		reader:     bufio.NewReader(os.Stdin),
 	}
 	return c
 }
@@ -65,7 +65,7 @@ func (c *raftKVClient) readString() []string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	cmdStr=strings. TrimSuffix(cmdStr, "\n")
+	cmdStr = strings.TrimSuffix(cmdStr, "\n")
 	// To gather quotes
 	cmdArr = CmdRegex.FindAllString(cmdStr, -1)
 	for i := range cmdArr {
@@ -155,13 +155,13 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	case raftpb.SET:
 		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
 			Command: raftpb.SET,
-			Key: cmdArr[1],
-			Value: cmdArr[2],
+			Key:     cmdArr[1],
+			Value:   cmdArr[2],
 		})
 	case raftpb.DEL:
 		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
 			Command: raftpb.DEL,
-			Key: cmdArr[1],
+			Key:     cmdArr[1],
 		})
 	case raftpb.ENDTXN:
 		if err := c.Transaction(); err != nil {
@@ -177,7 +177,7 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 func (c *raftKVClient) Run() {
 	for {
 		cmdArr := c.readString()
-		if err := c.validCmd(cmdArr); err != nil{
+		if err := c.validCmd(cmdArr); err != nil {
 			if err.Error() != "" {
 				fmt.Println(err)
 			}
@@ -209,7 +209,7 @@ func (c *raftKVClient) Run() {
 	}
 }
 
-func (c *raftKVClient) parseServerAddr(key string) (string, error){
+func (c *raftKVClient) parseServerAddr(key string) (string, error) {
 	u, err := url.Parse(c.serverAddr)
 	if err != nil {
 		return "", err
@@ -268,7 +268,7 @@ func (c *raftKVClient) Get(key string) error {
 	return errors.New(string(body))
 }
 
-func (c *raftKVClient) Set(key string, value string) error{
+func (c *raftKVClient) Set(key string, value string) error {
 	var reqBody []byte
 	var err error
 	if reqBody, err = json.Marshal(httpd.SetJSON{key: value}); err != nil {
@@ -320,16 +320,18 @@ func (c *raftKVClient) OptimizeTxnCommands() (txnJson httpd.TxnJSON) {
 	for idx, cmd := range c.txnCmds.Commands {
 		switch cmd.Command {
 		case raftpb.SET:
-			val, ok := lastSetMap[cmd.Key]; if ok {
-			txnSkips[val] = true // skip
-		}
+			val, ok := lastSetMap[cmd.Key]
+			if ok {
+				txnSkips[val] = true // skip
+			}
 			lastSetMap[cmd.Key] = idx
 		case raftpb.DEL:
-			val, ok := lastSetMap[cmd.Key]; if ok {
-			txnSkips[val] = true // skip
-			txnSkips[idx] = true // skip
-			delete(lastSetMap, cmd.Key)
-		}
+			val, ok := lastSetMap[cmd.Key]
+			if ok {
+				txnSkips[val] = true // skip
+				txnSkips[idx] = true // skip
+				delete(lastSetMap, cmd.Key)
+			}
 		}
 	}
 
@@ -343,12 +345,13 @@ func (c *raftKVClient) OptimizeTxnCommands() (txnJson httpd.TxnJSON) {
 	return newTxnCmds
 }
 
-func (c *raftKVClient) Transaction() error{
+func (c *raftKVClient) Transaction() error {
 	fmt.Printf("Submitting %s\n", c.txnCmds)
 	var reqBody []byte
 	var err error
 
-	txnJsonCmds := c.OptimizeTxnCommands(); if len(txnJsonCmds.Commands) == 0  {
+	txnJsonCmds := c.OptimizeTxnCommands()
+	if len(txnJsonCmds.Commands) == 0 {
 		fmt.Println("No effect because of this txn and " +
 			"so not submitting it to server")
 		return nil
