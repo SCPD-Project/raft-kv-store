@@ -62,14 +62,16 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		key := getKey(r.URL.Path)
 		if key == "" {
 			w.WriteHeader(http.StatusBadRequest)
-		}
-		val, err := s.coordinator.Get(key)
-		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			msg = err.Error()
+			msg = "key is missing"
 		} else {
-			w.WriteHeader(http.StatusOK)
-			msg = fmt.Sprintf("Key=%s, Value=%s", key, val)
+			val, err := s.coordinator.Get(key)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				msg = err.Error()
+			} else {
+				w.WriteHeader(http.StatusOK)
+				msg = fmt.Sprintf("Key=%s, Value=%s", key, val)
+			}
 		}
 
 		io.WriteString(w, msg)
@@ -85,8 +87,6 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 				msg = fmt.Sprintf("Unable to set: %s has len > 1", m)
 			} else {
 				var k, v string
-				for k, v = range m {
-				}
 				if err := s.coordinator.Set(k, v); err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					msg = fmt.Sprintf("Unable to set: %s", err.Error())
