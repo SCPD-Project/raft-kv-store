@@ -1,7 +1,7 @@
 package common
 
 import (
-	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/raft-kv-store/raftpb"
 )
 
 // Phase is enum for different phases of

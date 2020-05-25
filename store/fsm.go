@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/raft-kv-store/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"

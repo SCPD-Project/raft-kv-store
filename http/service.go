@@ -11,8 +11,8 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"github.com/RAFT-KV-STORE/coordinator"
-	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/raft-kv-store/coordinator"
+	"github.com/raft-kv-store/raftpb"
 	"github.com/gogo/protobuf/proto"
 )
 

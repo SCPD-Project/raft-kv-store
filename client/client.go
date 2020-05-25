@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	httpd "github.com/RAFT-KV-STORE/http"
-	"github.com/RAFT-KV-STORE/raftpb"
+	httpd "github.com/raft-kv-store/http"
+	"github.com/raft-kv-store/raftpb"
 )
 
 var(

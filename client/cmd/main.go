@@ -5,7 +5,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/RAFT-KV-STORE/client"
+	"github.com/raft-kv-store/client"
 	flag "github.com/spf13/pflag"
 )
 
