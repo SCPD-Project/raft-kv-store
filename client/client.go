@@ -341,13 +341,13 @@ func (c *raftKVClient) OptimizeTxnCommands() (txnJson httpd.TxnJSON) {
 }
 
 func (c *raftKVClient) Transaction() error{
-	fmt.Printf("Sumbitting %s\n", c.txnCmds)
+	fmt.Printf("Submitting %s\n", c.txnCmds)
 	var reqBody []byte
 	var err error
 
 	txnJsonCmds := c.OptimizeTxnCommands(); if len(txnJsonCmds.Commands) == 0  {
 		fmt.Println(" No effect because of this txn and " +
-			"so not sending it to server")
+			"so not submitting it to server")
 		return nil
 	}
 

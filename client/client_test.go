@@ -21,6 +21,7 @@ func (c *raftKVClient) appendTestCmds(method, key, value string) {
 		})
 	}
 }
+
 func TestClient(t *testing.T) {
 	c := NewRaftKVClient("localhost:20000")
 

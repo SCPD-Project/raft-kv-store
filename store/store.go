@@ -144,3 +144,14 @@ func (s *Store) Join(nodeID, addr string) error {
 	s.log.Infof("node %s at %s joined successfully", nodeID, addr)
 	return nil
 }
+
+
+func (s *Store) ValidateKeyExists(key string)(value string, err error) {
+	value, ok := s.kv[key]
+	if !ok {
+		s.log.Infof(" Key %s not found ", key)
+		return "", fmt.Errorf( "key: %s not found", key)
+	}
+
+	return value, nil
+}

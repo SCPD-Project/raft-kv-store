@@ -49,16 +49,6 @@ func startCohort(store *Store, listenAddress string) {
 	// setup raft for cohort
 }
 
-func (c* Cohort) ValidateKeyExists(key string)(value string, err error) {
-	value, ok := c.store.kv[key]
-	if !ok {
-		c.store.log.Infof(" Key %s not found ", key)
-		return "", fmt.Errorf( "key: %s not found", key)
-	}
-
-	return value, nil
-}
-
 // ProcessCommands will process simple Get/Set (non-transactional) cmds from
 // the coordinator.
 func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.RPCResponse) error {
@@ -69,7 +59,7 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.
 		command := raftCommand.Commands[0]
 		switch command.Method {
 		case raftpb.GET:
-			value, err := c.ValidateKeyExists(command.Key); if err != nil {
+			value, err := c.store.ValidateKeyExists(command.Key); if err != nil {
 				return err
 			} else {
 				*reply = common.RPCResponse{
@@ -96,7 +86,7 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.
 			return nil
 		case raftpb.DEL:
 
-			_, err := c.ValidateKeyExists(command.Key); if err != nil {
+			_, err := c.store.ValidateKeyExists(command.Key); if err != nil {
 				return err
 			}
 		}
@@ -122,28 +112,14 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 		c.mu.Lock()
 		defer c.mu.Unlock()
 
-		var keyExists = true
-		// 1. If there is a valid key already existing before del, return true
-		// 2. If there is a valid set for the key in this txn.
-		cmdMap := make(map[string]string)
+		var err error
 		for _, cmd := range ops.Cmds.Commands {
-			switch cmd.Method {
-			case raftpb.SET:
-				cmdMap[cmd.Key] = raftpb.SET
-			case raftpb.DEL:
-				_, keyExists = c.store.kv[cmd.Key]
-				if !keyExists {
-					keyExists = true
-					_, ok := cmdMap[cmd.Key]; if !ok {
-						keyExists = false
-						break
-					}
-				}
-				delete(cmdMap, cmd.Key)
+			if cmd.Method == raftpb.DEL {
+				_, err = c.store.ValidateKeyExists(cmd.Key); if err != nil { break }
 			}
 		}
 
-		if c.store.transactionInProgress || !keyExists {
+		if c.store.transactionInProgress || err != nil {
 			c.opsMap[ops.Txid] = ops
 			c.opsMap[ops.Txid].Phase = common.NotPrepared
 			// no need to update cohort state machine, it is equivalent
