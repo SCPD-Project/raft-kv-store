@@ -308,33 +308,23 @@ func (c *raftKVClient) Delete(key string) error {
 }
 
 func (c *raftKVClient) OptimizeTxnCommands() (txnJson httpd.TxnJSON) {
-	cmdMap := make(map[string]map[string]httpd.TxnCommand)
+	cmdMap := make(map[string]httpd.TxnCommand)
 	for _, cmd := range c.txnCmds.Commands {
 		switch cmd.Command {
 		case raftpb.SET:
-			value, ok := cmdMap[cmd.Key]; if !ok {
-				newMap := make(map[string]httpd.TxnCommand)
-				newMap[cmd.Command] = cmd
-				cmdMap[cmd.Key] = newMap
-			} else {
-				value[cmd.Command] = cmd
-			}
+			cmdMap[cmd.Key] = cmd
 		case raftpb.DEL:
 			_, ok := cmdMap[cmd.Key]; if ok {
 				delete(cmdMap, cmd.Key)
 			} else {
-				newMap := make(map[string]httpd.TxnCommand)
-				newMap[cmd.Command] = cmd
-				cmdMap[cmd.Key] = newMap
+				cmdMap[cmd.Key] = cmd
 			}
 		}
 	}
 
 	newTxnCmds := httpd.TxnJSON{}
-	for _, txnCmdMap := range cmdMap {
-		for _, value := range txnCmdMap {
-			newTxnCmds.Commands = append(newTxnCmds.Commands, value)
-		}
+	for _, value := range cmdMap {
+		newTxnCmds.Commands = append(newTxnCmds.Commands, value)
 	}
 
 	return newTxnCmds

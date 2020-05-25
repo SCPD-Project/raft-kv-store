@@ -70,12 +70,12 @@ func TestClient(t *testing.T) {
 		}
 	}
 
-	// del a, set a 10 => del a, set a 10 (only server has knowledge if first del "a" is valid)
+	// del a, set a 10 => set a 10
 	c.txnCmds = httpd.TxnJSON{}
 	c.appendTestCmds(raftpb.DEL, "a", "5")
 	c.appendTestCmds(raftpb.SET, "a", "10")
 	test4TxnCmds := c.OptimizeTxnCommands().Commands
-	if len(test4TxnCmds) != 2 {
-		t.Errorf("Expected map size == 2 where as got : %d", len(test4TxnCmds))
+	if len(test4TxnCmds) != 1 {
+		t.Errorf("Expected map size == 1 where as got : %d", len(test4TxnCmds))
 	}
 }
