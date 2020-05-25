@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,10 @@ import (
 var(
 	CmdRegex = regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)\n`)
 )
+
+func parseInt64(s string) (int64, error) {
+	return strconv.ParseInt(s, 10, 64)
+}
 
 func addURLScheme(s string) string{
 	if strings.HasPrefix(s, "https://") {
@@ -74,23 +79,19 @@ func (c *raftKVClient) readString() []string {
 	return cmdArr
 }
 
-func (c *raftKVClient) validGet(cmdArr []string) error {
+func (c *raftKVClient) validCmd2(cmdArr []string, op string) error {
 	if len(cmdArr) != 2 {
-		return errors.New("Invalid get command. Correct syntax: get [key]")
+		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key]", op)
 	}
 	return nil
 }
 
-func (c *raftKVClient) validSet(cmdArr []string) error {
-	if len(cmdArr) != 3 {
-		return errors.New("Invalid set command. Correct syntax: set [key] [value]")
+func (c *raftKVClient) validCmd3(cmdArr []string, op string) error {
+	if len(cmdArr) != 3{
+		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key] [value]", op)
 	}
-	return nil
-}
-
-func (c *raftKVClient) validDel(cmdArr []string) error {
-	if len(cmdArr) != 2 {
-		return errors.New("Invalid delete command. Correct syntax: del [key]")
+	if _, ok := parseInt64(cmdArr[2]); ok != nil{
+		return fmt.Errorf("Invalid %s command. Error in parsing %s", op, cmdArr[2])
 	}
 	return nil
 }
@@ -127,12 +128,10 @@ func (c *raftKVClient) validCmd(cmdArr []string) error {
 		return errors.New("")
 	}
 	switch cmdArr[0] {
-	case raftpb.GET:
-		return c.validGet(cmdArr)
-	case raftpb.SET:
-		return c.validSet(cmdArr)
-	case raftpb.DEL:
-		return c.validDel(cmdArr)
+	case raftpb.GET, raftpb.DEL:
+		return c.validCmd2(cmdArr, cmdArr[0])
+	case raftpb.SET, raftpb.ADD, raftpb.SUB:
+		return c.validCmd3(cmdArr, cmdArr[0])
 	case raftpb.TXN:
 		return c.validTxn(cmdArr)
 	case raftpb.ENDTXN:
@@ -153,16 +152,19 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	case raftpb.GET:
 		fmt.Println("Only set and delete command are available in transaction.")
 	case raftpb.SET:
+		val, _ := parseInt64(cmdArr[2])
 		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
 			Command: raftpb.SET,
 			Key: cmdArr[1],
-			Value: cmdArr[2],
+			Value: val,
 		})
 	case raftpb.DEL:
 		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
 			Command: raftpb.DEL,
 			Key: cmdArr[1],
 		})
+	case raftpb.ADD, raftpb.SUB:
+		fmt.Println("Not implemented")
 	case raftpb.ENDTXN:
 		if err := c.Transaction(); err != nil {
 			fmt.Println(err)
@@ -193,13 +195,16 @@ func (c *raftKVClient) Run() {
 				fmt.Println(err)
 			}
 		case raftpb.SET:
-			if err := c.Set(cmdArr[1], cmdArr[2]); err != nil {
+			val, _ := strconv.ParseInt(cmdArr[2], 10, 64)
+			if err := c.Set(cmdArr[1], val); err != nil {
 				fmt.Println(err)
 			}
 		case raftpb.DEL:
 			if err := c.Delete(cmdArr[1]); err != nil {
 				fmt.Println(err)
 			}
+		case raftpb.ADD, raftpb.SUB:
+			fmt.Println("Not implemented")
 		case raftpb.TXN:
 			c.TransactionRun(cmdArr)
 		case raftpb.EXIT:
@@ -268,7 +273,7 @@ func (c *raftKVClient) Get(key string) error {
 	return errors.New(string(body))
 }
 
-func (c *raftKVClient) Set(key string, value string) error{
+func (c *raftKVClient) Set(key string, value int64) error{
 	var reqBody []byte
 	var err error
 	if reqBody, err = json.Marshal(httpd.SetJSON{key: value}); err != nil {
@@ -308,7 +313,7 @@ func (c *raftKVClient) Delete(key string) error {
 }
 
 func (c *raftKVClient) Transaction() error{
-	fmt.Printf("Sumbitting %s\n", c.txnCmds)
+	fmt.Printf("Submitting %s\n", c.txnCmds)
 	var reqBody []byte
 	var err error
 	if reqBody, err = json.Marshal(c.txnCmds); err != nil {
