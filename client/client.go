@@ -308,39 +308,48 @@ func (c *raftKVClient) Delete(key string) error {
 }
 
 func (c *raftKVClient) OptimizeTxnCommands() (txnJson httpd.TxnJSON) {
-	cmdMap := make(map[string]httpd.TxnCommand)
-	for _, cmd := range c.txnCmds.Commands {
+	cmdMap := make(map[string]int)
+	txnStates := make([]bool, len(c.txnCmds.Commands))
+
+	// To guarantee same ordering of commands as the input in txn, maintain separate
+	// array txnStates and skip any `True` values in that array.
+	for idx, cmd := range c.txnCmds.Commands {
 		switch cmd.Command {
 		case raftpb.SET:
-			cmdMap[cmd.Key] = cmd
+			val, ok := cmdMap[cmd.Key]; if ok {
+				txnStates[val] = true // skip
+			}
+			cmdMap[cmd.Key] = idx
 		case raftpb.DEL:
-			_, ok := cmdMap[cmd.Key]; if ok {
+			val, ok := cmdMap[cmd.Key]; if ok {
+				txnStates[val] = true // skip
+				txnStates[idx] = true // skip
 				delete(cmdMap, cmd.Key)
-			} else {
-				cmdMap[cmd.Key] = cmd
 			}
 		}
 	}
 
 	newTxnCmds := httpd.TxnJSON{}
-	for _, value := range cmdMap {
-		newTxnCmds.Commands = append(newTxnCmds.Commands, value)
+	for idx, value := range txnStates {
+		if !value {
+			newTxnCmds.Commands = append(newTxnCmds.Commands, c.txnCmds.Commands[idx])
+		}
 	}
 
 	return newTxnCmds
 }
 
 func (c *raftKVClient) Transaction() error{
-	fmt.Printf("Submitting %s\n", c.txnCmds)
 	var reqBody []byte
 	var err error
 
 	txnJsonCmds := c.OptimizeTxnCommands(); if len(txnJsonCmds.Commands) == 0  {
-		fmt.Println(" No effect because of this txn and " +
+		fmt.Println("No effect because of this txn and " +
 			"so not submitting it to server")
 		return nil
 	}
 
+	fmt.Println("Optimized txn which will be submitted to the server:", txnJsonCmds)
 	if reqBody, err = json.Marshal(txnJsonCmds); err != nil {
 		return err
 	}
