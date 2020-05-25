@@ -307,11 +307,50 @@ func (c *raftKVClient) Delete(key string) error {
 	return errors.New(string(body))
 }
 
+func (c *raftKVClient) OptimizeTxnCommands() (txnJson httpd.TxnJSON) {
+	cmdMap := make(map[string]int)
+	txnStates := make([]bool, len(c.txnCmds.Commands))
+
+	// To guarantee same ordering of commands as the input in txn, maintain separate
+	// array txnStates and skip any `True` values in that array.
+	for idx, cmd := range c.txnCmds.Commands {
+		switch cmd.Command {
+		case raftpb.SET:
+			val, ok := cmdMap[cmd.Key]; if ok {
+			txnStates[val] = true // skip
+		}
+			cmdMap[cmd.Key] = idx
+		case raftpb.DEL:
+			val, ok := cmdMap[cmd.Key]; if ok {
+			txnStates[val] = true // skip
+			txnStates[idx] = true // skip
+			delete(cmdMap, cmd.Key)
+		}
+		}
+	}
+
+	newTxnCmds := httpd.TxnJSON{}
+	for idx, value := range txnStates {
+		if !value {
+			newTxnCmds.Commands = append(newTxnCmds.Commands, c.txnCmds.Commands[idx])
+		}
+	}
+
+	return newTxnCmds
+}
+
 func (c *raftKVClient) Transaction() error{
-	fmt.Printf("Sumbitting %s\n", c.txnCmds)
+	fmt.Printf("Submitting %s\n", c.txnCmds)
 	var reqBody []byte
 	var err error
-	if reqBody, err = json.Marshal(c.txnCmds); err != nil {
+
+	txnJsonCmds := c.OptimizeTxnCommands(); if len(txnJsonCmds.Commands) == 0  {
+		fmt.Println("No effect because of this txn and " +
+			"so not submitting it to server")
+		return nil
+	}
+	fmt.Println("Optimized txn to be submitted to the server:", txnJsonCmds)
+	if reqBody, err = json.Marshal(txnJsonCmds); err != nil {
 		return err
 	}
 	resp, err := c.newTxnRequest(reqBody)
