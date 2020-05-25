@@ -308,30 +308,34 @@ func (c *raftKVClient) Delete(key string) error {
 }
 
 func (c *raftKVClient) OptimizeTxnCommands() (txnJson httpd.TxnJSON) {
-	cmdMap := make(map[string]int)
-	txnStates := make([]bool, len(c.txnCmds.Commands))
+	lastSetMap := make(map[string]int)
+	txnSkips := make([]bool, len(c.txnCmds.Commands))
 
-	// To guarantee same ordering of commands as the input in txn, maintain separate
-	// array txnStates and skip any `True` values in that array.
+	/* lastSetMap contains only valid keys (no `del` cmd followed by `set` in input cmd seq).
+	*  If Keys exist, they are mapped to the index of last "set cmd" in the input cmd seq.
+	*
+	*  Also, to guarantee same ordering of commands as the input in txn, maintain separate
+	* array txnSkips to skip values containing `True`.
+	 */
 	for idx, cmd := range c.txnCmds.Commands {
 		switch cmd.Command {
 		case raftpb.SET:
-			val, ok := cmdMap[cmd.Key]; if ok {
-			txnStates[val] = true // skip
+			val, ok := lastSetMap[cmd.Key]; if ok {
+			txnSkips[val] = true // skip
 		}
-			cmdMap[cmd.Key] = idx
+			lastSetMap[cmd.Key] = idx
 		case raftpb.DEL:
-			val, ok := cmdMap[cmd.Key]; if ok {
-			txnStates[val] = true // skip
-			txnStates[idx] = true // skip
-			delete(cmdMap, cmd.Key)
+			val, ok := lastSetMap[cmd.Key]; if ok {
+			txnSkips[val] = true // skip
+			txnSkips[idx] = true // skip
+			delete(lastSetMap, cmd.Key)
 		}
 		}
 	}
 
-	newTxnCmds := httpd.TxnJSON{}
-	for idx, value := range txnStates {
-		if !value {
+	var newTxnCmds httpd.TxnJSON
+	for idx, ifSkip := range txnSkips {
+		if !ifSkip {
 			newTxnCmds.Commands = append(newTxnCmds.Commands, c.txnCmds.Commands[idx])
 		}
 	}

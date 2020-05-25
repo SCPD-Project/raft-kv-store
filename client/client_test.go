@@ -7,13 +7,13 @@ import (
 	"testing"
 )
 
-func (c *raftKVClient) appendTestCmds(method, key, value string) {
+func (c *raftKVClient) appendTestCmds(method, key string, value ...string) {
 	switch method {
 	case raftpb.SET:
 		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
 			Command: method,
 			Key: key,
-			Value: value,
+			Value: value[0],
 		})
 	case raftpb.DEL:
 		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
@@ -31,7 +31,7 @@ func TestClient(t *testing.T) {
 	c.appendTestCmds(raftpb.SET, "a", "5")
 	c.appendTestCmds(raftpb.SET, "a", "3")
 	c.appendTestCmds(raftpb.SET, "b", "10")
-	c.appendTestCmds(raftpb.DEL, "a", "")
+	c.appendTestCmds(raftpb.DEL, "a")
 	test1TxnCmds := c.OptimizeTxnCommands().Commands
 	test1ExpectKey := "b"
 	if len(test1TxnCmds) != 1 {
@@ -48,7 +48,7 @@ func TestClient(t *testing.T) {
 	c.txnCmds = httpd.TxnJSON{}
 	c.appendTestCmds(raftpb.SET, "a", "5")
 	c.appendTestCmds(raftpb.SET, "a", "3")
-	c.appendTestCmds(raftpb.DEL, "a", "")
+	c.appendTestCmds(raftpb.DEL, "a")
 	test2TxnCmds := c.OptimizeTxnCommands().Commands
 	if len(test2TxnCmds) > 0 {
 		t.Errorf("Expected no txn effect where as got :%d", len(test2TxnCmds))
@@ -58,7 +58,7 @@ func TestClient(t *testing.T) {
 	c.txnCmds = httpd.TxnJSON{}
 	c.appendTestCmds(raftpb.SET, "a", "5")
 	c.appendTestCmds(raftpb.SET, "a", "10")
-	c.appendTestCmds(raftpb.DEL, "b", "")
+	c.appendTestCmds(raftpb.DEL, "b")
 	test3TxnCmds := c.OptimizeTxnCommands().Commands
 	test3ExpectKeys := []string{"a", "b"}
 	if len(test3TxnCmds) != 2 {
@@ -74,7 +74,7 @@ func TestClient(t *testing.T) {
 
 	// del a, set a 10, set b 10, del b => del a, set a 10
 	c.txnCmds = httpd.TxnJSON{}
-	c.appendTestCmds(raftpb.DEL, "a", "")
+	c.appendTestCmds(raftpb.DEL, "a")
 	c.appendTestCmds(raftpb.SET, "a", "10")
 	test4TxnCmds := c.OptimizeTxnCommands().Commands
 	test4CmdSeq := []string{"del", "set"}
@@ -90,12 +90,12 @@ func TestClient(t *testing.T) {
 
 	// del a, del b, set a 5, set b 6, set b 15, del c => del a, del b, set a 5, set b 15, del c
 	c.txnCmds = httpd.TxnJSON{}
-	c.appendTestCmds(raftpb.DEL, "a", "")
-	c.appendTestCmds(raftpb.DEL, "b", "")
+	c.appendTestCmds(raftpb.DEL, "a")
+	c.appendTestCmds(raftpb.DEL, "b")
 	c.appendTestCmds(raftpb.SET, "a", "5")
 	c.appendTestCmds(raftpb.SET, "b", "6")
 	c.appendTestCmds(raftpb.SET, "b", "15")
-	c.appendTestCmds(raftpb.DEL, "c", "")
+	c.appendTestCmds(raftpb.DEL, "c")
 	test5TxnCmds := c.OptimizeTxnCommands().Commands
 
 	// for validating order of txns
@@ -131,7 +131,7 @@ func TestClient(t *testing.T) {
 
 	// del a => del a
 	c.txnCmds = httpd.TxnJSON{}
-	c.appendTestCmds(raftpb.DEL, "a", "")
+	c.appendTestCmds(raftpb.DEL, "a")
 	test6TxnCmds := c.OptimizeTxnCommands().Commands
 	test6ExpectedKey := "del"
 	if len(test6TxnCmds) != 1 {
