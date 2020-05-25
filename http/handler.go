@@ -40,11 +40,17 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.coordinator.Join(joinMsg.ID, joinMsg.RaftAddress); err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
+	if s.store != nil {
+		if err := s.store.Join(joinMsg.ID, joinMsg.RaftAddress); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := s.coordinator.Join(joinMsg.ID, joinMsg.RaftAddress); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
-
 }
 
 func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
@@ -62,16 +68,15 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		key := getKey(r.URL.Path)
 		if key == "" {
 			w.WriteHeader(http.StatusBadRequest)
-			msg = "key is missing"
+		}
+		val, err := s.coordinator.Get(key)
+		if err != nil {
+			io.WriteString(w, err.Error()+"\n")
+			w.WriteHeader(http.StatusInternalServerError)
+			msg = err.Error()
 		} else {
-			val, err := s.coordinator.Get(key)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				msg = err.Error()
-			} else {
-				w.WriteHeader(http.StatusOK)
-				msg = fmt.Sprintf("Key=%s, Value=%s", key, val)
-			}
+			w.WriteHeader(http.StatusOK)
+			msg = fmt.Sprintf("Key=%s, Value=%s", key, val)
 		}
 
 		io.WriteString(w, msg)
@@ -87,6 +92,8 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 				msg = fmt.Sprintf("Unable to set: %s has len > 1", m)
 			} else {
 				var k, v string
+				for k, v = range m {
+				}
 				if err := s.coordinator.Set(k, v); err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					msg = fmt.Sprintf("Unable to set: %s", err.Error())
@@ -102,14 +109,11 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		if key == "" {
 			w.WriteHeader(http.StatusBadRequest)
 			msg = "key is missing"
+		} else if err := s.coordinator.Delete(key); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			msg = err.Error()
 		} else {
-			err := s.coordinator.Delete(key)
-			if err != nil {
-				w.WriteHeader(http.StatusInternalServerError)
-				msg = err.Error()
-			} else {
-				w.WriteHeader(http.StatusOK)
-			}
+			w.WriteHeader(http.StatusOK)
 		}
 		io.WriteString(w, msg)
 	default:
@@ -121,14 +125,14 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
-// TODO: No raft leader api exposed in coordinator
-// // handleLeader mainly used for debugs.
-// func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request) {
+// handleLeader mainly used for debugs.
+func (s *Service) handleLeader(w http.ResponseWriter, r *http.Request) {
 
-// 	s.log.Debug("Handling request for leader")
-// 	io.WriteString(w, string(s.coordinator.Leader()))
-
-// }
+	s.log.Debug("Handling request for leader")
+	if s.store != nil {
+		io.WriteString(w, string(s.store.Leader()))
+	}
+}
 
 // handleTransaction
 func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {

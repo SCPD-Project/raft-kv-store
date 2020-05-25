@@ -44,7 +44,7 @@ func startCohort(store *Store, listenAddress string) {
 		log.Fatal("listen error:", err)
 	}
 	go http.Serve(listener, nil)
-	c.store.log.Infof("RPC server started successfully on :%s", listenAddress)
+	c.store.log.Info("RPC server started successfully")
 
 	// setup raft for cohort
 }
@@ -54,20 +54,16 @@ func startCohort(store *Store, listenAddress string) {
 func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.RPCResponse) error {
 
 	// No need to go to raft for Get/Leader cmds
-	c.store.log.Info("Processing rpc call: ", raftCommand)
+	c.store.log.Info("Processing rpc call", raftCommand)
 	if len(raftCommand.Commands) == 1 {
 		command := raftCommand.Commands[0]
 		switch command.Method {
 		case raftpb.GET:
-			value, err := c.store.ValidateKeyExists(command.Key); if err != nil {
-				return err
-			} else {
-				*reply = common.RPCResponse{
-					Status: 0,
-					Value:  value,
-				}
-				return nil
+			*reply = common.RPCResponse{
+				Status: 0,
+				Value:  c.store.kv[command.Key],
 			}
+			return nil
 
 		case raftpb.LEADER:
 
@@ -84,11 +80,6 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *common.
 			}
 
 			return nil
-		case raftpb.DEL:
-
-			_, err := c.store.ValidateKeyExists(command.Key); if err != nil {
-				return err
-			}
 		}
 	}
 
@@ -111,17 +102,13 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 		// If transaction is already in progress, prepare should return "No"
 		c.mu.Lock()
 		defer c.mu.Unlock()
-
-		var err error
-		for _, cmd := range ops.Cmds.Commands {
-			if cmd.Method == raftpb.DEL {
-				_, err = c.store.ValidateKeyExists(cmd.Key); if err != nil { break }
+		if c.store.transactionInProgress {
+			*reply = common.RPCResponse{
+				// TODO: use different status codes to give appropriate
+				// error to co-ordinator. For now, -1 is failure
+				Status: -1,
+				Value:  string(common.NotPrepared),
 			}
-		}
-
-		if c.store.transactionInProgress || err != nil {
-			c.opsMap[ops.Txid] = ops
-			c.opsMap[ops.Txid].Phase = common.NotPrepared
 			// no need to update cohort state machine, it is equivalent
 			// to a no transaction.
 			return fmt.Errorf("Not prepared")
@@ -192,11 +179,4 @@ func (c *Cohort) ProcessTransactionMessages(ops *common.ShardOps, reply *common.
 
 	}
 	return nil
-}
-
-// ProcessJoin processes join message.
-// TODO: Use this to join cohort raft as well.
-func (c *Cohort) ProcessJoin(joinMsg *raftpb.JoinMsg, reply *common.RPCResponse) error {
-
-	return c.store.Join(joinMsg.ID, joinMsg.RaftAddress)
 }
