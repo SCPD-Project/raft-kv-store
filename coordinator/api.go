@@ -2,9 +2,9 @@ package coordinator
 
 import (
 	"fmt"
-	"github.com/hashicorp/raft"
 	"net/rpc"
 
+	"github.com/hashicorp/raft"
 	"github.com/raft-kv-store/common"
 	"github.com/raft-kv-store/raftpb"
 	"github.com/rs/xid"

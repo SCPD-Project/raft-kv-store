@@ -196,7 +196,7 @@ func (c *raftKVClient) Run() {
 				fmt.Println(err)
 			}
 		case common.SET:
-			val, _ := strconv.ParseInt(cmdArr[2], 10, 64)
+			val, _ := parseInt64(cmdArr[2])
 			if err := c.Set(cmdArr[1], val); err != nil {
 				fmt.Println(err)
 			}

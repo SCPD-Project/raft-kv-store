@@ -10,7 +10,6 @@ import (
 	"github.com/jinzhu/copier"
 	"github.com/raft-kv-store/common"
 	"github.com/raft-kv-store/raftpb"
-
 )
 
 type fsm Coordinator

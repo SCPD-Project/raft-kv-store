@@ -2,12 +2,12 @@ package store
 
 import (
 	"fmt"
-	"github.com/RAFT-KV-STORE/common"
 	"io"
 
-	"github.com/raft-kv-store/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
 	log "github.com/sirupsen/logrus"
 )
 
