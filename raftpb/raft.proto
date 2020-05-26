@@ -40,10 +40,9 @@ message ShardOps {
 
 message RPCResponse {
     int32 status = 1;
-    int64 value = 5;
-    string addr = 6;
-    string phase = 3;
-    GlobalTransaction gt = 2;
+    int64 value = 2;
+    string addr = 3;
+    string phase = 4;
 }
 
 message RaftCommand {
