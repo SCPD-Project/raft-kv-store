@@ -10,8 +10,8 @@ import (
 	"net/rpc"
 	"sync"
 
-	"github.com/RAFT-KV-STORE/common"
-	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 )
@@ -60,11 +60,18 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *raftpb.
 		command := raftCommand.Commands[0]
 		switch command.Method {
 		case common.GET:
-			*reply = raftpb.RPCResponse{
-				Status: 0,
-				Value:  c.store.kv[command.Key],
+			if val, ok := c.store.kv[command.Key]; ok {
+				*reply = raftpb.RPCResponse{
+					Status: 0,
+					Value: val,
+				}
+				return nil
+			} else {
+				*reply = raftpb.RPCResponse{
+					Status: -1,
+				}
+				return fmt.Errorf("Key=%s does not exist", command.Key)
 			}
-			return nil
 
 		case common.LEADER:
 			if c.store.raft.State() == raft.Leader {

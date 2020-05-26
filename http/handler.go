@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/raft-kv-store/raftpb"
 	"github.com/golang/protobuf/proto"
 )
 
@@ -54,7 +54,6 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		val, err := s.coordinator.Get(key)
 		if err != nil {
-			io.WriteString(w, err.Error()+"\n")
 			w.WriteHeader(http.StatusInternalServerError)
 			msg = err.Error()
 		} else {

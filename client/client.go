@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/RAFT-KV-STORE/common"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -17,8 +16,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/golang/protobuf/proto"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
+
 )
 
 var(

@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/RAFT-KV-STORE/common"
-	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
 	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"
 )

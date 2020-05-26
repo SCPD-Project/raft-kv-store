@@ -10,7 +10,7 @@ jobs:
     environment:
       PROTOC_VERSION: "3.11.4"
 
-    working_directory: /go/src/github.com/SCPD-Project/RAFT-KV-Store
+    working_directory: /go/src/github.com/SCPD-Project/raft-kv-store
     steps:
       - checkout
       - restore_cache: # restores saved cache if no changes are detected since last run

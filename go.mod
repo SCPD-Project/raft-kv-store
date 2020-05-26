@@ -1,4 +1,4 @@
-module github.com/RAFT-KV-STORE
+module github.com/raft-kv-store
 
 go 1.14
 

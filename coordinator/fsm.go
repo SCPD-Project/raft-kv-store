@@ -2,14 +2,15 @@ package coordinator
 
 import (
 	"fmt"
-	"github.com/RAFT-KV-STORE/common"
 	"io"
 	"io/ioutil"
 
-	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 	"github.com/jinzhu/copier"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
+
 )
 
 type fsm Coordinator

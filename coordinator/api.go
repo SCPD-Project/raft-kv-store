@@ -5,8 +5,8 @@ import (
 	"github.com/hashicorp/raft"
 	"net/rpc"
 
-	"github.com/RAFT-KV-STORE/common"
-	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
 	"github.com/rs/xid"
 )
 
@@ -39,7 +39,7 @@ func (c *Coordinator) Get(key string) (int64, error) {
 
 	err = client.Call("Cohort.ProcessCommands", cmd, &response)
 
-	return response.Value, nil
+	return response.Value, err
 
 }
 
