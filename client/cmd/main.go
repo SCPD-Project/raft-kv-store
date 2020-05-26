@@ -15,7 +15,7 @@ const (
 
 // Command line parameters
 var (
-	serverAddress   string
+	serverAddress string
 )
 
 func init() {

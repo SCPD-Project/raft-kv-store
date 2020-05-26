@@ -3,7 +3,6 @@ package client
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -13,43 +12,50 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
-	httpd "github.com/raft-kv-store/http"
+	"github.com/golang/protobuf/proto"
+	"github.com/raft-kv-store/common"
 	"github.com/raft-kv-store/raftpb"
 )
 
-var(
+var (
 	CmdRegex = regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)\n`)
 )
 
-func addURLScheme(s string) string{
+func parseInt64(s string) (int64, error) {
+	return strconv.ParseInt(s, 10, 64)
+}
+
+func addURLScheme(s string) string {
 	if strings.HasPrefix(s, "https://") {
 		s = strings.Replace(s, "https://", "http://", 1)
 		return s
 	} else if !strings.HasPrefix(s, "http://") {
-		return  "http://" + s
+		return "http://" + s
 	}
 	return s
 }
 
-type raftKVClient struct{
-	client *http.Client
+type raftKVClient struct {
+	client     *http.Client
 	serverAddr string
 	// TODO: Add stop API to avoid exposing Terminate channel
 	Terminate chan os.Signal
-	reader *bufio.Reader
-	inTxn bool
-	txnCmds httpd.TxnJSON
+	reader    *bufio.Reader
+	inTxn     bool
+	txnCmds   *raftpb.RaftCommand
 }
 
-func NewRaftKVClient(serverAddr string) *raftKVClient{
+func NewRaftKVClient(serverAddr string) *raftKVClient {
 	c := &raftKVClient{
-		client: &http.Client{Timeout: 5 * time.Second},
+		client:     &http.Client{Timeout: 5 * time.Second},
 		serverAddr: addURLScheme(serverAddr),
-		Terminate : make(chan os.Signal, 1),
-		reader: bufio.NewReader(os.Stdin),
+		Terminate:  make(chan os.Signal, 1),
+		reader:     bufio.NewReader(os.Stdin),
+		txnCmds:    &raftpb.RaftCommand{},
 	}
 	return c
 }
@@ -65,7 +71,7 @@ func (c *raftKVClient) readString() []string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	cmdStr=strings. TrimSuffix(cmdStr, "\n")
+	cmdStr = strings.TrimSuffix(cmdStr, "\n")
 	// To gather quotes
 	cmdArr = CmdRegex.FindAllString(cmdStr, -1)
 	for i := range cmdArr {
@@ -74,23 +80,19 @@ func (c *raftKVClient) readString() []string {
 	return cmdArr
 }
 
-func (c *raftKVClient) validGet(cmdArr []string) error {
+func (c *raftKVClient) validCmd2(cmdArr []string) error {
 	if len(cmdArr) != 2 {
-		return errors.New("Invalid get command. Correct syntax: get [key]")
+		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key]", cmdArr[0])
 	}
 	return nil
 }
 
-func (c *raftKVClient) validSet(cmdArr []string) error {
+func (c *raftKVClient) validCmd3(cmdArr []string) error {
 	if len(cmdArr) != 3 {
-		return errors.New("Invalid set command. Correct syntax: set [key] [value]")
+		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key] [value]", cmdArr[0])
 	}
-	return nil
-}
-
-func (c *raftKVClient) validDel(cmdArr []string) error {
-	if len(cmdArr) != 2 {
-		return errors.New("Invalid delete command. Correct syntax: del [key]")
+	if _, ok := parseInt64(cmdArr[2]); ok != nil {
+		return fmt.Errorf("Invalid %s command. Error in parsing %s as numerical value", cmdArr[0], cmdArr[2])
 	}
 	return nil
 }
@@ -127,17 +129,15 @@ func (c *raftKVClient) validCmd(cmdArr []string) error {
 		return errors.New("")
 	}
 	switch cmdArr[0] {
-	case raftpb.GET:
-		return c.validGet(cmdArr)
-	case raftpb.SET:
-		return c.validSet(cmdArr)
-	case raftpb.DEL:
-		return c.validDel(cmdArr)
-	case raftpb.TXN:
+	case common.GET, common.DEL:
+		return c.validCmd2(cmdArr)
+	case common.SET, common.ADD, common.SUB:
+		return c.validCmd3(cmdArr)
+	case common.TXN:
 		return c.validTxn(cmdArr)
-	case raftpb.ENDTXN:
+	case common.ENDTXN:
 		return c.validEndTxn(cmdArr)
-	case raftpb.EXIT:
+	case common.EXIT:
 		return c.validExit(cmdArr)
 	default:
 		return errors.New("Command not recognized.")
@@ -146,38 +146,41 @@ func (c *raftKVClient) validCmd(cmdArr []string) error {
 
 func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	switch cmdArr[0] {
-	case raftpb.TXN:
+	case common.TXN:
 		c.inTxn = true
-		c.txnCmds = httpd.TxnJSON{}
+		c.txnCmds = &raftpb.RaftCommand{}
 		fmt.Println("Entering transaction status")
-	case raftpb.GET:
-		fmt.Println("Only set and delete command are available in transaction.")
-	case raftpb.SET:
-		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
-			Command: raftpb.SET,
-			Key: cmdArr[1],
-			Value: cmdArr[2],
+	case common.SET:
+		val, _ := parseInt64(cmdArr[2])
+		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
+			Method: common.SET,
+			Key:    cmdArr[1],
+			Value:  val,
 		})
-	case raftpb.DEL:
-		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
-			Command: raftpb.DEL,
-			Key: cmdArr[1],
+	case common.DEL:
+		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
+			Method: common.DEL,
+			Key:    cmdArr[1],
 		})
-	case raftpb.ENDTXN:
+	case common.ADD, common.SUB:
+		fmt.Println("Not implemented")
+	case common.ENDTXN:
 		if err := c.Transaction(); err != nil {
 			fmt.Println(err)
 		}
 		c.inTxn = false
-	case raftpb.EXIT:
+	case common.EXIT:
 		fmt.Println("Stop client")
 		os.Exit(0)
+	default:
+		fmt.Println("Only set and delete command are available in transaction.")
 	}
 }
 
 func (c *raftKVClient) Run() {
 	for {
 		cmdArr := c.readString()
-		if err := c.validCmd(cmdArr); err != nil{
+		if err := c.validCmd(cmdArr); err != nil {
 			if err.Error() != "" {
 				fmt.Println(err)
 			}
@@ -188,28 +191,31 @@ func (c *raftKVClient) Run() {
 			continue
 		}
 		switch cmdArr[0] {
-		case raftpb.GET:
+		case common.GET:
 			if err := c.Get(cmdArr[1]); err != nil {
 				fmt.Println(err)
 			}
-		case raftpb.SET:
-			if err := c.Set(cmdArr[1], cmdArr[2]); err != nil {
+		case common.SET:
+			val, _ := parseInt64(cmdArr[2])
+			if err := c.Set(cmdArr[1], val); err != nil {
 				fmt.Println(err)
 			}
-		case raftpb.DEL:
+		case common.DEL:
 			if err := c.Delete(cmdArr[1]); err != nil {
 				fmt.Println(err)
 			}
-		case raftpb.TXN:
+		case common.ADD, common.SUB:
+			fmt.Println("Not implemented")
+		case common.TXN:
 			c.TransactionRun(cmdArr)
-		case raftpb.EXIT:
+		case common.EXIT:
 			fmt.Println("Stop client")
 			os.Exit(0)
 		}
 	}
 }
 
-func (c *raftKVClient) parseServerAddr(key string) (string, error){
+func (c *raftKVClient) parseServerAddr(key string) (string, error) {
 	u, err := url.Parse(c.serverAddr)
 	if err != nil {
 		return "", err
@@ -268,10 +274,14 @@ func (c *raftKVClient) Get(key string) error {
 	return errors.New(string(body))
 }
 
-func (c *raftKVClient) Set(key string, value string) error{
+func (c *raftKVClient) Set(key string, value int64) error {
 	var reqBody []byte
 	var err error
-	if reqBody, err = json.Marshal(httpd.SetJSON{key: value}); err != nil {
+	if reqBody, err = proto.Marshal(&raftpb.Command{
+		Method: common.SET,
+		Key:    key,
+		Value:  value,
+	}); err != nil {
 		return err
 	}
 	resp, err := c.newRequest(http.MethodPost, key, reqBody)
@@ -307,11 +317,56 @@ func (c *raftKVClient) Delete(key string) error {
 	return errors.New(string(body))
 }
 
-func (c *raftKVClient) Transaction() error{
-	fmt.Printf("Sumbitting %s\n", c.txnCmds)
+func (c *raftKVClient) OptimizeTxnCommands() {
+	lastSetMap := make(map[string]int)
+	txnSkips := make([]bool, len(c.txnCmds.Commands))
+	/* lastSetMap contains only valid keys (no `del` cmd followed by `set` in input cmd seq).
+	*  If Keys exist, they are mapped to the index of last "set cmd" in the input cmd seq.
+	*
+	*  Also, to guarantee same ordering of commands as the input in txn, maintain separate
+	* array txnSkips to skip values containing `True`.
+	 */
+	for idx, cmd := range c.txnCmds.Commands {
+		switch cmd.Method {
+		case common.SET:
+			val, ok := lastSetMap[cmd.Key]
+			if ok {
+				txnSkips[val] = true // skip
+			}
+			lastSetMap[cmd.Key] = idx
+		case common.DEL:
+			val, ok := lastSetMap[cmd.Key]
+			if ok {
+				txnSkips[val] = true // skip
+				txnSkips[idx] = true // skip
+				delete(lastSetMap, cmd.Key)
+			}
+		}
+	}
+
+	var newCmds []*raftpb.Command
+	for idx, ifSkip := range txnSkips {
+		if !ifSkip {
+			newCmds = append(newCmds, c.txnCmds.Commands[idx])
+		}
+	}
+	c.txnCmds.Commands = newCmds
+}
+
+func (c *raftKVClient) Transaction() error {
+	oldLen := len(c.txnCmds.Commands)
+	c.OptimizeTxnCommands()
+	if newLen := len(c.txnCmds.Commands); newLen == 0 {
+		fmt.Println("txn takes no effect so not submitting to server")
+		return nil
+	} else if newLen < oldLen {
+		fmt.Printf("Optimized txn to %v: \n", c.txnCmds.Commands)
+	}
+	fmt.Printf("Submitting %v\n", c.txnCmds.Commands)
+
 	var reqBody []byte
 	var err error
-	if reqBody, err = json.Marshal(c.txnCmds); err != nil {
+	if reqBody, err = proto.Marshal(c.txnCmds); err != nil {
 		return err
 	}
 	resp, err := c.newTxnRequest(reqBody)
@@ -326,3 +381,4 @@ func (c *raftKVClient) Transaction() error{
 	}
 	return errors.New(string(body))
 }
+

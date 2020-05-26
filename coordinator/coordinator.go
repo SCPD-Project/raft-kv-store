@@ -1,7 +1,6 @@
 package coordinator
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/rpc"
 	"os"
@@ -25,12 +24,12 @@ type Coordinator struct {
 
 	// coordinator state - This has to be replicated.
 	// TODO: concurrent transactions
-	txMap map[string]*common.GlobalTransaction
+	txMap map[string]*raftpb.GlobalTransaction
 	m     sync.Mutex
 
 	// ShardToPeers need to be populated based on a config.
 	// If time permits, these can be auto-discovered.
-	ShardToPeers map[int][]string
+	ShardToPeers map[int64][]string
 
 	Client *rpc.Client
 	log    *log.Entry
@@ -53,9 +52,9 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 	if err!= nil {
 		log.Fatal(err)
 	}
-	shardToPeers := make(map[int][]string)
+	shardToPeers := make(map[int64][]string)
 	for i, shard := range shardsInfo.Shards {
-		shardToPeers[i] = append(shardToPeers[i], shard...)
+		shardToPeers[int64(i)] = append(shardToPeers[int64(i)], shard...)
 	}
 
 	c := &Coordinator{
@@ -64,7 +63,7 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 		RaftDir:     raftDir,
 
 		ShardToPeers: shardToPeers,
-		txMap:        make(map[string]*common.GlobalTransaction),
+		txMap:        make(map[string]*raftpb.GlobalTransaction),
 		log:          log,
 	}
 
@@ -80,32 +79,27 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 
 // Replicate replicates put/get/deletes on coordinator's
 // state machine
-func (c *Coordinator) Replicate(key, op string, value *common.GlobalTransaction) error {
+func (c *Coordinator) Replicate(key, op string, gt *raftpb.GlobalTransaction) error {
 
 	var cmd *raftpb.RaftCommand
-	gt, err := json.Marshal(value)
-	if err != nil {
-		return fmt.Errorf("unable to marshal global transaction obj: %s", err)
-	}
-
 	switch op {
 
-	case raftpb.SET:
+	case common.SET:
 		cmd = &raftpb.RaftCommand{
 			Commands: []*raftpb.Command{
 				{
-					Method: raftpb.SET,
+					Method: op,
 					Key:    key,
-					Value:  string(gt),
+					Gt: gt,
 				},
 			},
 		}
 
-	case raftpb.DEL:
+	case common.DEL:
 		cmd = &raftpb.RaftCommand{
 			Commands: []*raftpb.Command{
 				{
-					Method: raftpb.DEL,
+					Method: op,
 					Key:    key,
 				},
 			},

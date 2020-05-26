@@ -6,6 +6,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
+	"github.com/raft-kv-store/common"
 	"github.com/raft-kv-store/raftpb"
 	log "github.com/sirupsen/logrus"
 )
@@ -21,9 +22,9 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	if len(raftCommand.Commands) == 1 {
 		command := raftCommand.Commands[0]
 		switch command.Method {
-		case raftpb.SET:
+		case common.SET:
 			return f.applySet(command.Key, command.Value)
-		case raftpb.DEL:
+		case common.DEL:
 			return f.applyDelete(command.Key)
 
 		default:
@@ -39,7 +40,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	defer f.mu.Unlock()
 
 	// Clone the map.
-	o := make(map[string]string)
+	o := make(map[string]int64)
 	for k, v := range f.kv {
 		o[k] = v
 	}
@@ -50,7 +51,7 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore stores the key-value store to a previous state.
 func (f *fsm) Restore(_ io.ReadCloser) error {
-	o := make(map[string]string)
+	o := make(map[string]int64)
 	o = f.restore()
 	f.log.Infof(" Snapshot restore from bucket: %s with kv-size: %d", f.persistBucketName, len(o))
 
@@ -60,7 +61,7 @@ func (f *fsm) Restore(_ io.ReadCloser) error {
 	return nil
 }
 
-func (f *fsm) applySet(key, value string) interface{} {
+func (f *fsm) applySet(key string, value int64) interface{} {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.kv[key] = value
@@ -80,9 +81,9 @@ func (f *fsm) applyTransaction(ops []*raftpb.Command) interface{} {
 	defer f.mu.Unlock()
 	for _, command := range ops {
 		switch command.Method {
-		case raftpb.SET:
+		case common.SET:
 			f.kv[command.Key] = command.Value
-		case raftpb.DEL:
+		case common.DEL:
 			delete(f.kv, command.Key)
 		}
 	}
@@ -90,7 +91,7 @@ func (f *fsm) applyTransaction(ops []*raftpb.Command) interface{} {
 }
 
 type fsmSnapshot struct {
-	store         map[string]string
+	store         map[string]int64
 	persistDBConn *persistKvDB
 	bucketName    string
 	logger        *log.Entry
