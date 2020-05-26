@@ -20,8 +20,8 @@ bin/kv -i node-2 -l :11002 -r :12002 -j :11000
 ## Start KV Shard-2
 ```
 bin/kv -i node-3 -l :15000 -r :16000
-bin/kv -i node-4 -l :15001 -r :16001 -j :16000 
-bin/kv -i node-5 -l :15002 -r :16002 -j :16000
+bin/kv -i node-4 -l :15001 -r :16001 -j :15000 
+bin/kv -i node-5 -l :15002 -r :16002 -j :15000
 ```
 
 ## Start Coordinator (Only 1 for now)

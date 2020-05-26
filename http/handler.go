@@ -65,7 +65,6 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		val, err := s.coordinator.Get(key)
 		if err != nil {
-			io.WriteString(w, err.Error()+"\n")
 			w.WriteHeader(http.StatusInternalServerError)
 			msg = err.Error()
 		} else {
