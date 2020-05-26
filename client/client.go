@@ -317,8 +317,53 @@ func (c *raftKVClient) Delete(key string) error {
 	return errors.New(string(body))
 }
 
+func (c *raftKVClient) OptimizeTxnCommands() {
+	lastSetMap := make(map[string]int)
+	txnSkips := make([]bool, len(c.txnCmds.Commands))
+	/* lastSetMap contains only valid keys (no `del` cmd followed by `set` in input cmd seq).
+	*  If Keys exist, they are mapped to the index of last "set cmd" in the input cmd seq.
+	*
+	*  Also, to guarantee same ordering of commands as the input in txn, maintain separate
+	* array txnSkips to skip values containing `True`.
+	 */
+	for idx, cmd := range c.txnCmds.Commands {
+		switch cmd.Method {
+		case common.SET:
+			val, ok := lastSetMap[cmd.Key]
+			if ok {
+				txnSkips[val] = true // skip
+			}
+			lastSetMap[cmd.Key] = idx
+		case common.DEL:
+			val, ok := lastSetMap[cmd.Key]
+			if ok {
+				txnSkips[val] = true // skip
+				txnSkips[idx] = true // skip
+				delete(lastSetMap, cmd.Key)
+			}
+		}
+	}
+
+	var newCmds []*raftpb.Command
+	for idx, ifSkip := range txnSkips {
+		if !ifSkip {
+			newCmds = append(newCmds, c.txnCmds.Commands[idx])
+		}
+	}
+	c.txnCmds.Commands = newCmds
+}
+
 func (c *raftKVClient) Transaction() error {
-	fmt.Printf("Submitting %v\n", c.txnCmds)
+	oldLen := len(c.txnCmds.Commands)
+	c.OptimizeTxnCommands()
+	if newLen := len(c.txnCmds.Commands); newLen == 0 {
+		fmt.Println("txn takes no effect so not submitting to server")
+		return nil
+	} else if newLen < oldLen {
+		fmt.Printf("Optimized txn to %v: \n", c.txnCmds.Commands)
+	}
+	fmt.Printf("Submitting %v\n", c.txnCmds.Commands)
+
 	var reqBody []byte
 	var err error
 	if reqBody, err = proto.Marshal(c.txnCmds); err != nil {
@@ -336,3 +381,4 @@ func (c *raftKVClient) Transaction() error {
 	}
 	return errors.New(string(body))
 }
+
