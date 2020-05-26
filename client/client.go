@@ -356,14 +356,19 @@ func (c *raftKVClient) OptimizeTxnCommands() {
 func (c *raftKVClient) Transaction() error {
 	oldLen := len(c.txnCmds.Commands)
 	c.OptimizeTxnCommands()
-	if newLen := len(c.txnCmds.Commands); newLen == 0 {
+	newLen := len(c.txnCmds.Commands)
+	if newLen == 0 {
 		fmt.Println("txn takes no effect so not submitting to server")
 		return nil
 	} else if newLen < oldLen {
 		fmt.Printf("Optimized txn to %v: \n", c.txnCmds.Commands)
 	}
-	fmt.Printf("Submitting %v\n", c.txnCmds.Commands)
 
+	if newLen == 1 {
+		return c.txnToSingleCmd()
+	}
+
+	fmt.Printf("Submitting %v\n", c.txnCmds.Commands)
 	var reqBody []byte
 	var err error
 	if reqBody, err = proto.Marshal(c.txnCmds); err != nil {
@@ -382,3 +387,14 @@ func (c *raftKVClient) Transaction() error {
 	return errors.New(string(body))
 }
 
+func (c *raftKVClient) txnToSingleCmd() error {
+	cmd := c.txnCmds.Commands[0]
+	switch cmd.Method {
+	case common.DEL:
+		return c.Delete(cmd.Key)
+	case common.SET:
+		return c.Set(cmd.Key, cmd.Value)
+	default:
+		return errors.New(("Not implemented"))
+	}
+}
