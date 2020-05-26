@@ -9,8 +9,8 @@ import (
 	"net/rpc"
 	"sync"
 
-	"github.com/RAFT-KV-STORE/common"
-	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 )

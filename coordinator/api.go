@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/rpc"
 
-	"github.com/RAFT-KV-STORE/common"
-	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
 	"github.com/rs/xid"
 )
 

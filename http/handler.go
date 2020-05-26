@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/raft-kv-store/raftpb"
 	"github.com/golang/protobuf/proto"
 )
 

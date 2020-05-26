@@ -1,4 +1,4 @@
-# RAFT-KV-Store
+# raft-kv-store
 
 ## Build Protocol Buffer
 ```

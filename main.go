@@ -3,14 +3,14 @@ package main
 import (
 	"fmt"
 
-	"github.com/RAFT-KV-STORE/common"
-	httpd "github.com/RAFT-KV-STORE/http"
-	"github.com/RAFT-KV-STORE/store"
+	"github.com/raft-kv-store/common"
+	httpd "github.com/raft-kv-store/http"
+	"github.com/raft-kv-store/store"
 	nested "github.com/antonfisher/nested-logrus-formatter"
 	log "github.com/sirupsen/logrus"
 	flag "github.com/spf13/pflag"
 
-	"github.com/RAFT-KV-STORE/coordinator"
+	"github.com/raft-kv-store/coordinator"
 
 	"os"
 	"os/signal"
