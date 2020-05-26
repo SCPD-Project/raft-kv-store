@@ -19,10 +19,9 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/raft-kv-store/common"
 	"github.com/raft-kv-store/raftpb"
-
 )
 
-var(
+var (
 	CmdRegex = regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)\n`)
 )
 
@@ -30,33 +29,33 @@ func parseInt64(s string) (int64, error) {
 	return strconv.ParseInt(s, 10, 64)
 }
 
-func addURLScheme(s string) string{
+func addURLScheme(s string) string {
 	if strings.HasPrefix(s, "https://") {
 		s = strings.Replace(s, "https://", "http://", 1)
 		return s
 	} else if !strings.HasPrefix(s, "http://") {
-		return  "http://" + s
+		return "http://" + s
 	}
 	return s
 }
 
-type raftKVClient struct{
-	client *http.Client
+type raftKVClient struct {
+	client     *http.Client
 	serverAddr string
 	// TODO: Add stop API to avoid exposing Terminate channel
 	Terminate chan os.Signal
-	reader *bufio.Reader
-	inTxn bool
-	txnCmds *raftpb.RaftCommand
+	reader    *bufio.Reader
+	inTxn     bool
+	txnCmds   *raftpb.RaftCommand
 }
 
-func NewRaftKVClient(serverAddr string) *raftKVClient{
+func NewRaftKVClient(serverAddr string) *raftKVClient {
 	c := &raftKVClient{
-		client: &http.Client{Timeout: 5 * time.Second},
+		client:     &http.Client{Timeout: 5 * time.Second},
 		serverAddr: addURLScheme(serverAddr),
-		Terminate : make(chan os.Signal, 1),
-		reader: bufio.NewReader(os.Stdin),
-		txnCmds : &raftpb.RaftCommand{},
+		Terminate:  make(chan os.Signal, 1),
+		reader:     bufio.NewReader(os.Stdin),
+		txnCmds:    &raftpb.RaftCommand{},
 	}
 	return c
 }
@@ -72,7 +71,7 @@ func (c *raftKVClient) readString() []string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	cmdStr=strings. TrimSuffix(cmdStr, "\n")
+	cmdStr = strings.TrimSuffix(cmdStr, "\n")
 	// To gather quotes
 	cmdArr = CmdRegex.FindAllString(cmdStr, -1)
 	for i := range cmdArr {
@@ -89,10 +88,10 @@ func (c *raftKVClient) validCmd2(cmdArr []string, op string) error {
 }
 
 func (c *raftKVClient) validCmd3(cmdArr []string, op string) error {
-	if len(cmdArr) != 3{
+	if len(cmdArr) != 3 {
 		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key] [value]", op)
 	}
-	if _, ok := parseInt64(cmdArr[2]); ok != nil{
+	if _, ok := parseInt64(cmdArr[2]); ok != nil {
 		return fmt.Errorf("Invalid %s command. Error in parsing %s as numerical value", op, cmdArr[2])
 	}
 	return nil
@@ -157,13 +156,13 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 		val, _ := parseInt64(cmdArr[2])
 		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
 			Method: common.SET,
-			Key: cmdArr[1],
-			Value: val,
+			Key:    cmdArr[1],
+			Value:  val,
 		})
 	case common.DEL:
 		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
 			Method: common.DEL,
-			Key: cmdArr[1],
+			Key:    cmdArr[1],
 		})
 	case common.ADD, common.SUB:
 		fmt.Println("Not implemented")
@@ -181,7 +180,7 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 func (c *raftKVClient) Run() {
 	for {
 		cmdArr := c.readString()
-		if err := c.validCmd(cmdArr); err != nil{
+		if err := c.validCmd(cmdArr); err != nil {
 			if err.Error() != "" {
 				fmt.Println(err)
 			}
@@ -216,7 +215,7 @@ func (c *raftKVClient) Run() {
 	}
 }
 
-func (c *raftKVClient) parseServerAddr(key string) (string, error){
+func (c *raftKVClient) parseServerAddr(key string) (string, error) {
 	u, err := url.Parse(c.serverAddr)
 	if err != nil {
 		return "", err
@@ -275,13 +274,13 @@ func (c *raftKVClient) Get(key string) error {
 	return errors.New(string(body))
 }
 
-func (c *raftKVClient) Set(key string, value int64) error{
+func (c *raftKVClient) Set(key string, value int64) error {
 	var reqBody []byte
 	var err error
 	if reqBody, err = proto.Marshal(&raftpb.Command{
 		Method: common.SET,
-		Key: key,
-		Value: value,
+		Key:    key,
+		Value:  value,
 	}); err != nil {
 		return err
 	}
@@ -318,7 +317,7 @@ func (c *raftKVClient) Delete(key string) error {
 	return errors.New(string(body))
 }
 
-func (c *raftKVClient) Transaction() error{
+func (c *raftKVClient) Transaction() error {
 	fmt.Printf("Submitting %v\n", c.txnCmds)
 	var reqBody []byte
 	var err error
