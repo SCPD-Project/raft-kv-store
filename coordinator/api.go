@@ -38,7 +38,7 @@ func (c *Coordinator) Get(key string) (string, error) {
 
 	err = client.Call("Cohort.ProcessCommands", cmd, &response)
 
-	return response.Value, nil
+	return response.Value, err
 
 }
 
