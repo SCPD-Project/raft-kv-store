@@ -112,11 +112,3 @@ type concurrentMap interface {
 	Set(string, interface{}) error
 	benchmarkSet(string, interface{}, time.Duration) error
 }
-
-
-
-
-
-
-
-
