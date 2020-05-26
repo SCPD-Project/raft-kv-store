@@ -8,4 +8,5 @@ const (
 	EXIT   = "exit"
 	TXN    = "txn"
 	ENDTXN = "end"
+	TRANSFER = "transfer"
 )

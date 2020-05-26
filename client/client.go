@@ -122,6 +122,13 @@ func (c *raftKVClient) validExit(cmdArr []string) error {
 	return nil
 }
 
+func (c *raftKVClient) validTransfer(cmdArr []string) error {
+	if len(cmdArr) != 4 {
+		return errors.New("Invalid tansfer command. Correct syntax: transfer")
+	}
+	return nil
+}
+
 func (c *raftKVClient) validCmd(cmdArr []string) error {
 	if len(cmdArr) == 0 {
 		return errors.New("")
@@ -139,6 +146,8 @@ func (c *raftKVClient) validCmd(cmdArr []string) error {
 		return c.validEndTxn(cmdArr)
 	case raftpb.EXIT:
 		return c.validExit(cmdArr)
+	case raftpb.TRANSFER:
+		return c.validTransfer(cmdArr)
 	default:
 		return errors.New("Command not recognized.")
 	}
@@ -174,6 +183,21 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	}
 }
 
+func (c *raftKVClient) TransferRun(cmdArr []string) {
+	cmdJson := httpd.TxnJSON{}
+	cmdJson.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
+		Command: raftpb.GET,
+		Key:     cmdArr[1],
+	})
+	cmdJson.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
+		Command: raftpb.GET,
+		Key:     cmdArr[2],
+	})
+	c.txnCmds.Commands = cmdJson.Commands
+	// Send it to the server and fetch the response
+
+}
+
 func (c *raftKVClient) Run() {
 	for {
 		cmdArr := c.readString()
@@ -202,6 +226,8 @@ func (c *raftKVClient) Run() {
 			}
 		case raftpb.TXN:
 			c.TransactionRun(cmdArr)
+		case raftpb.TRANSFER:
+			c.TransferRun(cmdArr)
 		case raftpb.EXIT:
 			fmt.Println("Stop client")
 			os.Exit(0)
