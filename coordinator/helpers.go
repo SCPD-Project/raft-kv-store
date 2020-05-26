@@ -8,15 +8,15 @@ import (
 	"github.com/RAFT-KV-STORE/raftpb"
 )
 
-// GetShardID return mapping from key to shardid
-func (c *Coordinator) GetShardID(key string) int {
+// GetShardID return mapping from key to shardID
+func (c *Coordinator) GetShardID(key string) int64 {
 
 	h := 0
 	nshards := len(c.ShardToPeers)
 	for _, c := range key {
 		h = 31*h + int(c)
 	}
-	return h % nshards
+	return int64(h % nshards)
 }
 
 // Leader returns leader of a shard. This call is made
@@ -24,11 +24,11 @@ func (c *Coordinator) GetShardID(key string) int {
 // leader.
 func (c *Coordinator) Leader(address string) (string, error) {
 
-	var response common.RPCResponse
+	var response raftpb.RPCResponse
 	cmd := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{
-				Method: raftpb.LEADER,
+				Method: common.LEADER,
 			},
 		},
 	}
@@ -39,13 +39,13 @@ func (c *Coordinator) Leader(address string) (string, error) {
 	}
 
 	err = client.Call("Cohort.ProcessCommands", cmd, &response)
-	return response.Value, err
+	return response.Addr, err
 }
 
 // FindLeader returns leader address in form (ip:port) and
 // shard id.
 // TODO: optimize FindLeader
-func (c *Coordinator) FindLeader(key string) (string, int, error) {
+func (c *Coordinator) FindLeader(key string) (string, int64, error) {
 
 	shardID := c.GetShardID(key)
 	// make rpc calls to get the leader
@@ -64,9 +64,9 @@ func (c *Coordinator) FindLeader(key string) (string, int, error) {
 // SendMessageToShard sends prepare message to a shard. The return value
 // indicates if the shard successfully performed the operation. This returns bool
 // as the caller need not care of the exact error
-func (c *Coordinator) SendMessageToShard(ops *common.ShardOps) bool {
+func (c *Coordinator) SendMessageToShard(ops *raftpb.ShardOps) bool {
 
-	var response common.RPCResponse
+	var response raftpb.RPCResponse
 
 	// Figure out leader for the shard
 	addr, _, err := c.FindLeader(ops.MasterKey)
@@ -86,6 +86,6 @@ func (c *Coordinator) SendMessageToShard(ops *common.ShardOps) bool {
 		c.log.Error(err)
 		return false
 	}
-	return response.Value == string(common.Prepared) || response.Value == string(common.Committed) || response.Value == string(common.Aborted)
+	return response.Phase == (common.Prepared) || response.Phase == (common.Committed) || response.Phase == (common.Aborted)
 
 }

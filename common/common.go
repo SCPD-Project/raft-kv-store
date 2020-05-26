@@ -14,6 +14,27 @@ import (
 )
 
 const (
+	GET    = "get"
+	SET    = "set"
+	DEL    = "del"
+	LEADER = "leader"
+	EXIT   = "exit"
+	TXN    = "txn"
+	ADD    = "ADD"
+	SUB    = "SUB"
+	ENDTXN = "end"
+
+	Prepare = "prepare"
+	Commit  = "commit"
+
+	Prepared  = "prepared"
+	Committed = "committed"
+	Aborted   = "Aborted"
+
+	NotPrepared = "NotPrepared"
+	Invalid     = "Invalid"
+	Abort       = "Abort"
+
 	RetainSnapshotCount = 2
 	RaftTimeout         = 10 * time.Second
 	NodeIDLen           = 5
@@ -38,7 +59,6 @@ func RandNodeID(n int) string {
 // SetupRaft initialises raft and returns a raft instance. If enableSingle is set, and there are no existing peers,
 // then this node becomes the first node, and therefore leader, of the cluster.
 func SetupRaft(fsm raft.FSM, id, raftAddress, raftDir string, enableSingle bool) (*raft.Raft, error) {
-
 	config := raft.DefaultConfig()
 	// Override defaults with configured values
 	config.SnapshotThreshold = uint64(SnapshotThreshold)

@@ -1,4 +1,6 @@
 github.com/DataDog/datadog-go v2.2.0+incompatible/go.mod h1:LButxg5PwREeZtORoXG3tL4fMGNddJ+vMq1mwgfaqoQ=
+github.com/LK4D4/trylock v0.0.0-20191027065348-ff7e133a5c54 h1:sg9CWNOhr58hMGmJ0q7x7jQ/B1RK/GyHNmeaYCJos9M=
+github.com/LK4D4/trylock v0.0.0-20191027065348-ff7e133a5c54/go.mod h1:uHbOgfPowb74TKlV4AR5Az2haG6evxzM8Lmj1Xil25E=
 github.com/antonfisher/nested-logrus-formatter v1.1.0 h1:wb5SkAtQD/VMTOkYimj8PtdNvbNEs0QWOQXSZAw/Ars=
 github.com/antonfisher/nested-logrus-formatter v1.1.0/go.mod h1:6WTfyWFkBc9+zyBaKIqRrg/KwMqBbodBjgbHjDz7zjA=
 github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 h1:EFSB7Zo9Eg91v7MJPVsifUysc/wPdN+NOnVe6bWbdBM=

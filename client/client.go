@@ -3,9 +3,9 @@ package client
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/RAFT-KV-STORE/common"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -17,8 +17,8 @@ import (
 	"strings"
 	"time"
 
-	httpd "github.com/RAFT-KV-STORE/http"
 	"github.com/RAFT-KV-STORE/raftpb"
+	"github.com/golang/protobuf/proto"
 )
 
 var(
@@ -46,7 +46,7 @@ type raftKVClient struct{
 	Terminate chan os.Signal
 	reader *bufio.Reader
 	inTxn bool
-	txnCmds httpd.TxnJSON
+	txnCmds raftpb.RaftCommand
 }
 
 func NewRaftKVClient(serverAddr string) *raftKVClient{
@@ -128,15 +128,15 @@ func (c *raftKVClient) validCmd(cmdArr []string) error {
 		return errors.New("")
 	}
 	switch cmdArr[0] {
-	case raftpb.GET, raftpb.DEL:
+	case common.GET, common.DEL:
 		return c.validCmd2(cmdArr, cmdArr[0])
-	case raftpb.SET, raftpb.ADD, raftpb.SUB:
+	case common.SET, common.ADD, common.SUB:
 		return c.validCmd3(cmdArr, cmdArr[0])
-	case raftpb.TXN:
+	case common.TXN:
 		return c.validTxn(cmdArr)
-	case raftpb.ENDTXN:
+	case common.ENDTXN:
 		return c.validEndTxn(cmdArr)
-	case raftpb.EXIT:
+	case common.EXIT:
 		return c.validExit(cmdArr)
 	default:
 		return errors.New("Command not recognized.")
@@ -145,32 +145,32 @@ func (c *raftKVClient) validCmd(cmdArr []string) error {
 
 func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	switch cmdArr[0] {
-	case raftpb.TXN:
+	case common.TXN:
 		c.inTxn = true
-		c.txnCmds = httpd.TxnJSON{}
+		c.txnCmds = raftpb.RaftCommand{}
 		fmt.Println("Entering transaction status")
-	case raftpb.GET:
+	case common.GET:
 		fmt.Println("Only set and delete command are available in transaction.")
-	case raftpb.SET:
+	case common.SET:
 		val, _ := parseInt64(cmdArr[2])
-		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
-			Command: raftpb.SET,
+		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
+			Method: common.SET,
 			Key: cmdArr[1],
 			Value: val,
 		})
-	case raftpb.DEL:
-		c.txnCmds.Commands = append(c.txnCmds.Commands, httpd.TxnCommand{
-			Command: raftpb.DEL,
+	case common.DEL:
+		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
+			Method: common.DEL,
 			Key: cmdArr[1],
 		})
-	case raftpb.ADD, raftpb.SUB:
+	case common.ADD, common.SUB:
 		fmt.Println("Not implemented")
-	case raftpb.ENDTXN:
+	case common.ENDTXN:
 		if err := c.Transaction(); err != nil {
 			fmt.Println(err)
 		}
 		c.inTxn = false
-	case raftpb.EXIT:
+	case common.EXIT:
 		fmt.Println("Stop client")
 		os.Exit(0)
 	}
@@ -190,24 +190,24 @@ func (c *raftKVClient) Run() {
 			continue
 		}
 		switch cmdArr[0] {
-		case raftpb.GET:
+		case common.GET:
 			if err := c.Get(cmdArr[1]); err != nil {
 				fmt.Println(err)
 			}
-		case raftpb.SET:
+		case common.SET:
 			val, _ := strconv.ParseInt(cmdArr[2], 10, 64)
 			if err := c.Set(cmdArr[1], val); err != nil {
 				fmt.Println(err)
 			}
-		case raftpb.DEL:
+		case common.DEL:
 			if err := c.Delete(cmdArr[1]); err != nil {
 				fmt.Println(err)
 			}
-		case raftpb.ADD, raftpb.SUB:
+		case common.ADD, common.SUB:
 			fmt.Println("Not implemented")
-		case raftpb.TXN:
+		case common.TXN:
 			c.TransactionRun(cmdArr)
-		case raftpb.EXIT:
+		case common.EXIT:
 			fmt.Println("Stop client")
 			os.Exit(0)
 		}
@@ -276,7 +276,11 @@ func (c *raftKVClient) Get(key string) error {
 func (c *raftKVClient) Set(key string, value int64) error{
 	var reqBody []byte
 	var err error
-	if reqBody, err = json.Marshal(httpd.SetJSON{key: value}); err != nil {
+	if reqBody, err = proto.Marshal(&raftpb.Command{
+		Method: common.SET,
+		Key: key,
+		Value: value,
+	}); err != nil {
 		return err
 	}
 	resp, err := c.newRequest(http.MethodPost, key, reqBody)
@@ -316,7 +320,7 @@ func (c *raftKVClient) Transaction() error{
 	fmt.Printf("Submitting %s\n", c.txnCmds)
 	var reqBody []byte
 	var err error
-	if reqBody, err = json.Marshal(c.txnCmds); err != nil {
+	if reqBody, err = proto.Marshal(&c.txnCmds); err != nil {
 		return err
 	}
 	resp, err := c.newTxnRequest(reqBody)

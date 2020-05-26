@@ -1,11 +1,11 @@
 package coordinator
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
-
 	"github.com/RAFT-KV-STORE/common"
+	"io"
+	"io/ioutil"
+
 	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
@@ -29,21 +29,14 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	command := raftCommand.Commands[0]
 
 	switch command.Method {
-	case raftpb.SET:
+	case common.SET:
 		f.m.Lock()
 		defer f.m.Unlock()
+		f.txMap[command.Key] = command.Gt
 
-		var gt common.GlobalTransaction
-		err := json.Unmarshal([]byte(command.Value), &gt)
-		if err != nil {
-			return fmt.Errorf("log entry corrupted")
-		}
-		f.txMap[command.Key] = &gt
-
-	case raftpb.DEL:
+	case common.DEL:
 		f.m.Lock()
 		defer f.m.Unlock()
-
 		delete(f.txMap, command.Key)
 	default:
 		panic(fmt.Sprintf("unrecognized command: %+v", command))
@@ -57,30 +50,37 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 	f.m.Lock()
 	defer f.m.Unlock()
 
-	o := make(map[string]*common.GlobalTransaction)
-	for k, v := range f.txMap {
-		gt := &common.GlobalTransaction{}
-		copier.Copy(gt, v)
-		o[k] = gt
+	o := raftpb.TxidMap{
+		Map: make(map[string]*raftpb.GlobalTransaction),
 	}
-	return &fsmSnapshot{cstate: o}, nil
+	for k, v := range f.txMap {
+		gt := &raftpb.GlobalTransaction{}
+		copier.Copy(gt, v)
+		o.Map[k] = gt
+	}
+	return &fsmSnapshot{txidMap: o}, nil
 }
 
 // Restore stores the key-value store to a previous state.
 func (f *fsm) Restore(rc io.ReadCloser) error {
 
 	// TODO: verify restore works as desired
-	o := make(map[string]*common.GlobalTransaction)
-	if err := json.NewDecoder(rc).Decode(&o); err != nil {
+	b, err := ioutil.ReadAll(rc)
+	if err != nil {
+		f.log.Fatal(err)
+	}
+
+	var o *raftpb.TxidMap
+	if err := proto.Unmarshal(b, o); err != nil {
 		return err
 	}
 
-	f.txMap = o
+	f.txMap = o.Map
 	return nil
 }
 
 type fsmSnapshot struct {
-	cstate map[string]*common.GlobalTransaction
+	txidMap raftpb.TxidMap
 }
 
 func (f *fsmSnapshot) Persist(sink raft.SnapshotSink) error {

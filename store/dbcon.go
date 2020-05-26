@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/binary"
 	"github.com/boltdb/bolt"
 	log "github.com/sirupsen/logrus"
 	"time"
@@ -41,7 +42,9 @@ func(f *fsmSnapshot) save() {
 		b := tx.Bucket([]byte(f.bucketName))
 
 		for key, value := range f.store {
-			err := b.Put([]byte(key), []byte(value))
+			buf := make([]byte, 8)
+			binary.LittleEndian.PutUint64(buf, uint64(value))
+			err := b.Put([]byte(key), buf)
 			if err != nil {
 				f.persistDBConn.log.Warnf(" Snapshot save failed for bucket: %s, " +
 					"key: %s", f.bucketName, key)
@@ -54,14 +57,14 @@ func(f *fsmSnapshot) save() {
 	}
 }
 
-func (f *fsm) restore() (kv map[string]string) {
+func (f *fsm) restore() (kv map[string]int64) {
 	if err := f.persistKvDbConn.db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(f.persistBucketName))
 		c := b.Cursor()
-		kv = make(map[string]string)
+		kv = make(map[string]int64)
 
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			kv[string(k)] = string(v)
+			kv[string(k)] = int64(binary.LittleEndian.Uint64(v))
 		}
 
 		return nil

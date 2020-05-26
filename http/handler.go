@@ -1,7 +1,6 @@
 package http
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,16 +11,6 @@ import (
 	"github.com/RAFT-KV-STORE/raftpb"
 	"github.com/golang/protobuf/proto"
 )
-
-type SetJSON map[string]string
-type TxnCommand struct {
-	Command string `json:"command"`
-	Key     string `json:"key"`
-	Value   string `json:"value"`
-}
-type TxnJSON struct {
-	Commands []TxnCommand
-}
 
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
@@ -76,25 +65,18 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, msg)
 
 	case http.MethodPost:
-		var m SetJSON
-		if err := json.NewDecoder(r.Body).Decode(&m); err != nil {
+		var cmd *raftpb.Command
+		if m, err := ioutil.ReadAll(r.Body); err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			msg = fmt.Sprintf("failed to read %v", r.Body)
+		} else if err = proto.Unmarshal(m, cmd); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			msg = fmt.Sprintf("failed to parse %v", r.Body)
+		} else if err := s.coordinator.Set(cmd.Key, cmd.Value); err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			msg = fmt.Sprintf("Unable to set: %s", err.Error())
 		} else {
-			if len(m) != 1 {
-				w.WriteHeader(http.StatusInternalServerError)
-				msg = fmt.Sprintf("Unable to set: %s has len > 1", m)
-			} else {
-				var k, v string
-				for k, v = range m {
-				}
-				if err := s.coordinator.Set(k, v); err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
-					msg = fmt.Sprintf("Unable to set: %s", err.Error())
-				} else {
-					w.WriteHeader(http.StatusOK)
-				}
-			}
+			w.WriteHeader(http.StatusOK)
 		}
 		io.WriteString(w, msg)
 
@@ -132,21 +114,14 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 	// ...so we convert it to a string by passing it through
 	// a buffer first. A 'costly' but useful process.
-	var cmds TxnJSON
-	if err := json.NewDecoder(r.Body).Decode(&cmds); err != nil {
+	var cmds *raftpb.RaftCommand
+	if m, err := ioutil.ReadAll(r.Body); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
+	} else if err = proto.Unmarshal(m, cmds); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
 	}
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	var raftCmds []*raftpb.Command
-	for _, cmd := range cmds.Commands {
-		raftCmds = append(raftCmds, &raftpb.Command{Method: cmd.Command, Key: cmd.Key, Value: cmd.Value})
-	}
-
-	_, err := s.coordinator.Transaction(raftCmds)
+	_, err := s.coordinator.Transaction(cmds)
 	if err != nil {
 		s.log.Error(err)
 		w.WriteHeader(http.StatusInternalServerError)

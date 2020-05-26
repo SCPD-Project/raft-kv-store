@@ -21,12 +21,14 @@ var _ = math.Inf
 const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 
 type Command struct {
-	Method               string   `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"`
-	Key                  string   `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
-	Value                string   `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Method               string             `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"`
+	Key                  string             `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Value                int64              `protobuf:"varint,5,opt,name=value,proto3" json:"value,omitempty"`
+	Gt                   *GlobalTransaction `protobuf:"bytes,6,opt,name=gt,proto3" json:"gt,omitempty"`
+	Cond                 *Cond              `protobuf:"bytes,4,opt,name=cond,proto3" json:"cond,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
+	XXX_unrecognized     []byte             `json:"-"`
+	XXX_sizecache        int32              `json:"-"`
 }
 
 func (m *Command) Reset()         { *m = Command{} }
@@ -68,11 +70,319 @@ func (m *Command) GetKey() string {
 	return ""
 }
 
-func (m *Command) GetValue() string {
+func (m *Command) GetValue() int64 {
 	if m != nil {
 		return m.Value
 	}
+	return 0
+}
+
+func (m *Command) GetGt() *GlobalTransaction {
+	if m != nil {
+		return m.Gt
+	}
+	return nil
+}
+
+func (m *Command) GetCond() *Cond {
+	if m != nil {
+		return m.Cond
+	}
+	return nil
+}
+
+type Cond struct {
+	Key                  string   `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value                int64    `protobuf:"varint,2,opt,name=value,proto3" json:"value,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *Cond) Reset()         { *m = Cond{} }
+func (m *Cond) String() string { return proto.CompactTextString(m) }
+func (*Cond) ProtoMessage()    {}
+func (*Cond) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f652ee94e728864d, []int{1}
+}
+
+func (m *Cond) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_Cond.Unmarshal(m, b)
+}
+func (m *Cond) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_Cond.Marshal(b, m, deterministic)
+}
+func (m *Cond) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_Cond.Merge(m, src)
+}
+func (m *Cond) XXX_Size() int {
+	return xxx_messageInfo_Cond.Size(m)
+}
+func (m *Cond) XXX_DiscardUnknown() {
+	xxx_messageInfo_Cond.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_Cond proto.InternalMessageInfo
+
+func (m *Cond) GetKey() string {
+	if m != nil {
+		return m.Key
+	}
 	return ""
+}
+
+func (m *Cond) GetValue() int64 {
+	if m != nil {
+		return m.Value
+	}
+	return 0
+}
+
+// GlobalTransaction captures the info of entire transaction
+type GlobalTransaction struct {
+	Txid string       `protobuf:"bytes,1,opt,name=txid,proto3" json:"txid,omitempty"`
+	Cmds *RaftCommand `protobuf:"bytes,2,opt,name=cmds,proto3" json:"cmds,omitempty"`
+	// Cohorts consists of leader's of all the shards.
+	// TODO: It can be used for transaction stats etc in the future.
+	Cohorts              []string            `protobuf:"bytes,3,rep,name=cohorts,proto3" json:"cohorts,omitempty"`
+	ShardToCommands      map[int64]*ShardOps `protobuf:"bytes,4,rep,name=shard_to_commands,json=shardToCommands,proto3" json:"shard_to_commands,omitempty" protobuf_key:"varint,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Phase                string              `protobuf:"bytes,5,opt,name=phase,proto3" json:"phase,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
+	XXX_unrecognized     []byte              `json:"-"`
+	XXX_sizecache        int32               `json:"-"`
+}
+
+func (m *GlobalTransaction) Reset()         { *m = GlobalTransaction{} }
+func (m *GlobalTransaction) String() string { return proto.CompactTextString(m) }
+func (*GlobalTransaction) ProtoMessage()    {}
+func (*GlobalTransaction) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f652ee94e728864d, []int{2}
+}
+
+func (m *GlobalTransaction) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GlobalTransaction.Unmarshal(m, b)
+}
+func (m *GlobalTransaction) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GlobalTransaction.Marshal(b, m, deterministic)
+}
+func (m *GlobalTransaction) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GlobalTransaction.Merge(m, src)
+}
+func (m *GlobalTransaction) XXX_Size() int {
+	return xxx_messageInfo_GlobalTransaction.Size(m)
+}
+func (m *GlobalTransaction) XXX_DiscardUnknown() {
+	xxx_messageInfo_GlobalTransaction.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GlobalTransaction proto.InternalMessageInfo
+
+func (m *GlobalTransaction) GetTxid() string {
+	if m != nil {
+		return m.Txid
+	}
+	return ""
+}
+
+func (m *GlobalTransaction) GetCmds() *RaftCommand {
+	if m != nil {
+		return m.Cmds
+	}
+	return nil
+}
+
+func (m *GlobalTransaction) GetCohorts() []string {
+	if m != nil {
+		return m.Cohorts
+	}
+	return nil
+}
+
+func (m *GlobalTransaction) GetShardToCommands() map[int64]*ShardOps {
+	if m != nil {
+		return m.ShardToCommands
+	}
+	return nil
+}
+
+func (m *GlobalTransaction) GetPhase() string {
+	if m != nil {
+		return m.Phase
+	}
+	return ""
+}
+
+type TxidMap struct {
+	Map                  map[string]*GlobalTransaction `protobuf:"bytes,1,rep,name=map,proto3" json:"map,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	XXX_NoUnkeyedLiteral struct{}                      `json:"-"`
+	XXX_unrecognized     []byte                        `json:"-"`
+	XXX_sizecache        int32                         `json:"-"`
+}
+
+func (m *TxidMap) Reset()         { *m = TxidMap{} }
+func (m *TxidMap) String() string { return proto.CompactTextString(m) }
+func (*TxidMap) ProtoMessage()    {}
+func (*TxidMap) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f652ee94e728864d, []int{3}
+}
+
+func (m *TxidMap) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_TxidMap.Unmarshal(m, b)
+}
+func (m *TxidMap) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_TxidMap.Marshal(b, m, deterministic)
+}
+func (m *TxidMap) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TxidMap.Merge(m, src)
+}
+func (m *TxidMap) XXX_Size() int {
+	return xxx_messageInfo_TxidMap.Size(m)
+}
+func (m *TxidMap) XXX_DiscardUnknown() {
+	xxx_messageInfo_TxidMap.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_TxidMap proto.InternalMessageInfo
+
+func (m *TxidMap) GetMap() map[string]*GlobalTransaction {
+	if m != nil {
+		return m.Map
+	}
+	return nil
+}
+
+type ShardOps struct {
+	Txid                 string       `protobuf:"bytes,1,opt,name=txid,proto3" json:"txid,omitempty"`
+	MasterKey            string       `protobuf:"bytes,2,opt,name=master_key,json=masterKey,proto3" json:"master_key,omitempty"`
+	Cmds                 *RaftCommand `protobuf:"bytes,3,opt,name=cmds,proto3" json:"cmds,omitempty"`
+	Phase                string       `protobuf:"bytes,4,opt,name=phase,proto3" json:"phase,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
+	XXX_unrecognized     []byte       `json:"-"`
+	XXX_sizecache        int32        `json:"-"`
+}
+
+func (m *ShardOps) Reset()         { *m = ShardOps{} }
+func (m *ShardOps) String() string { return proto.CompactTextString(m) }
+func (*ShardOps) ProtoMessage()    {}
+func (*ShardOps) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f652ee94e728864d, []int{4}
+}
+
+func (m *ShardOps) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ShardOps.Unmarshal(m, b)
+}
+func (m *ShardOps) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ShardOps.Marshal(b, m, deterministic)
+}
+func (m *ShardOps) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ShardOps.Merge(m, src)
+}
+func (m *ShardOps) XXX_Size() int {
+	return xxx_messageInfo_ShardOps.Size(m)
+}
+func (m *ShardOps) XXX_DiscardUnknown() {
+	xxx_messageInfo_ShardOps.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ShardOps proto.InternalMessageInfo
+
+func (m *ShardOps) GetTxid() string {
+	if m != nil {
+		return m.Txid
+	}
+	return ""
+}
+
+func (m *ShardOps) GetMasterKey() string {
+	if m != nil {
+		return m.MasterKey
+	}
+	return ""
+}
+
+func (m *ShardOps) GetCmds() *RaftCommand {
+	if m != nil {
+		return m.Cmds
+	}
+	return nil
+}
+
+func (m *ShardOps) GetPhase() string {
+	if m != nil {
+		return m.Phase
+	}
+	return ""
+}
+
+type RPCResponse struct {
+	Status               int32              `protobuf:"varint,1,opt,name=status,proto3" json:"status,omitempty"`
+	Value                int64              `protobuf:"varint,5,opt,name=value,proto3" json:"value,omitempty"`
+	Addr                 string             `protobuf:"bytes,6,opt,name=addr,proto3" json:"addr,omitempty"`
+	Phase                string             `protobuf:"bytes,3,opt,name=phase,proto3" json:"phase,omitempty"`
+	Gt                   *GlobalTransaction `protobuf:"bytes,2,opt,name=gt,proto3" json:"gt,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
+	XXX_unrecognized     []byte             `json:"-"`
+	XXX_sizecache        int32              `json:"-"`
+}
+
+func (m *RPCResponse) Reset()         { *m = RPCResponse{} }
+func (m *RPCResponse) String() string { return proto.CompactTextString(m) }
+func (*RPCResponse) ProtoMessage()    {}
+func (*RPCResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_f652ee94e728864d, []int{5}
+}
+
+func (m *RPCResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_RPCResponse.Unmarshal(m, b)
+}
+func (m *RPCResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_RPCResponse.Marshal(b, m, deterministic)
+}
+func (m *RPCResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_RPCResponse.Merge(m, src)
+}
+func (m *RPCResponse) XXX_Size() int {
+	return xxx_messageInfo_RPCResponse.Size(m)
+}
+func (m *RPCResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_RPCResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_RPCResponse proto.InternalMessageInfo
+
+func (m *RPCResponse) GetStatus() int32 {
+	if m != nil {
+		return m.Status
+	}
+	return 0
+}
+
+func (m *RPCResponse) GetValue() int64 {
+	if m != nil {
+		return m.Value
+	}
+	return 0
+}
+
+func (m *RPCResponse) GetAddr() string {
+	if m != nil {
+		return m.Addr
+	}
+	return ""
+}
+
+func (m *RPCResponse) GetPhase() string {
+	if m != nil {
+		return m.Phase
+	}
+	return ""
+}
+
+func (m *RPCResponse) GetGt() *GlobalTransaction {
+	if m != nil {
+		return m.Gt
+	}
+	return nil
 }
 
 type RaftCommand struct {
@@ -86,7 +396,7 @@ func (m *RaftCommand) Reset()         { *m = RaftCommand{} }
 func (m *RaftCommand) String() string { return proto.CompactTextString(m) }
 func (*RaftCommand) ProtoMessage()    {}
 func (*RaftCommand) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f652ee94e728864d, []int{1}
+	return fileDescriptor_f652ee94e728864d, []int{6}
 }
 
 func (m *RaftCommand) XXX_Unmarshal(b []byte) error {
@@ -126,7 +436,7 @@ func (m *JoinMsg) Reset()         { *m = JoinMsg{} }
 func (m *JoinMsg) String() string { return proto.CompactTextString(m) }
 func (*JoinMsg) ProtoMessage()    {}
 func (*JoinMsg) Descriptor() ([]byte, []int) {
-	return fileDescriptor_f652ee94e728864d, []int{2}
+	return fileDescriptor_f652ee94e728864d, []int{7}
 }
 
 func (m *JoinMsg) XXX_Unmarshal(b []byte) error {
@@ -163,6 +473,13 @@ func (m *JoinMsg) GetID() string {
 
 func init() {
 	proto.RegisterType((*Command)(nil), "raftpb.Command")
+	proto.RegisterType((*Cond)(nil), "raftpb.Cond")
+	proto.RegisterType((*GlobalTransaction)(nil), "raftpb.GlobalTransaction")
+	proto.RegisterMapType((map[int64]*ShardOps)(nil), "raftpb.GlobalTransaction.ShardToCommandsEntry")
+	proto.RegisterType((*TxidMap)(nil), "raftpb.TxidMap")
+	proto.RegisterMapType((map[string]*GlobalTransaction)(nil), "raftpb.TxidMap.MapEntry")
+	proto.RegisterType((*ShardOps)(nil), "raftpb.ShardOps")
+	proto.RegisterType((*RPCResponse)(nil), "raftpb.RPCResponse")
 	proto.RegisterType((*RaftCommand)(nil), "raftpb.RaftCommand")
 	proto.RegisterType((*JoinMsg)(nil), "raftpb.JoinMsg")
 }
@@ -170,17 +487,38 @@ func init() {
 func init() { proto.RegisterFile("raftpb/raft.proto", fileDescriptor_f652ee94e728864d) }
 
 var fileDescriptor_f652ee94e728864d = []byte{
-	// 184 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x2c, 0x4a, 0x4c, 0x2b,
-	0x29, 0x48, 0xd2, 0x07, 0x51, 0x7a, 0x05, 0x45, 0xf9, 0x25, 0xf9, 0x42, 0x6c, 0x10, 0x21, 0x25,
-	0x4f, 0x2e, 0x76, 0xe7, 0xfc, 0xdc, 0xdc, 0xc4, 0xbc, 0x14, 0x21, 0x31, 0x2e, 0xb6, 0xdc, 0xd4,
-	0x92, 0x8c, 0xfc, 0x14, 0x09, 0x46, 0x05, 0x46, 0x0d, 0xce, 0x20, 0x28, 0x4f, 0x48, 0x80, 0x8b,
-	0x39, 0x3b, 0xb5, 0x52, 0x82, 0x09, 0x2c, 0x08, 0x62, 0x0a, 0x89, 0x70, 0xb1, 0x96, 0x25, 0xe6,
-	0x94, 0xa6, 0x4a, 0x30, 0x83, 0xc5, 0x20, 0x1c, 0x25, 0x2b, 0x2e, 0xee, 0xa0, 0xc4, 0xb4, 0x12,
-	0x98, 0x71, 0xda, 0x5c, 0x1c, 0xc9, 0x10, 0x66, 0xb1, 0x04, 0xa3, 0x02, 0xb3, 0x06, 0xb7, 0x11,
-	0xbf, 0x1e, 0xc4, 0x52, 0x3d, 0xa8, 0x92, 0x20, 0xb8, 0x02, 0x25, 0x6b, 0x2e, 0x76, 0xaf, 0xfc,
-	0xcc, 0x3c, 0xdf, 0xe2, 0x74, 0x21, 0x05, 0x88, 0x31, 0x8e, 0x29, 0x29, 0x45, 0xa9, 0xc5, 0xc5,
-	0x50, 0xb7, 0x20, 0x0b, 0x09, 0xf1, 0x71, 0x31, 0x79, 0xba, 0x40, 0xdd, 0xc3, 0xe4, 0xe9, 0xe2,
-	0xc4, 0x11, 0x05, 0xf5, 0x4d, 0x12, 0x1b, 0xd8, 0x73, 0xc6, 0x80, 0x00, 0x00, 0x00, 0xff, 0xff,
-	0x7c, 0xb2, 0x38, 0xe1, 0xf1, 0x00, 0x00, 0x00,
+	// 518 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x8c, 0x54, 0xcd, 0x6e, 0xd3, 0x40,
+	0x10, 0xd6, 0xda, 0xce, 0xdf, 0x18, 0xd1, 0x66, 0xa9, 0xd0, 0x52, 0x09, 0xc9, 0xf2, 0x01, 0x0c,
+	0x48, 0xae, 0x14, 0x2e, 0xa8, 0x9c, 0x20, 0x45, 0xa8, 0xa0, 0x08, 0x58, 0x72, 0xea, 0x25, 0xda,
+	0x78, 0xdd, 0x24, 0x22, 0xf6, 0x5a, 0xde, 0x2d, 0x6a, 0x24, 0x1e, 0x80, 0x23, 0x27, 0x1e, 0x84,
+	0x27, 0x44, 0xde, 0x9f, 0xc4, 0x15, 0x29, 0x70, 0xf2, 0xce, 0xec, 0x8c, 0xbf, 0x6f, 0xbe, 0x99,
+	0x59, 0x18, 0xd6, 0xec, 0x52, 0x55, 0xf3, 0x93, 0xe6, 0x93, 0x56, 0xb5, 0x50, 0x02, 0x77, 0x8d,
+	0x2b, 0xfe, 0x89, 0xa0, 0x37, 0x16, 0x45, 0xc1, 0x4a, 0x8e, 0xef, 0x43, 0xb7, 0xc8, 0xd5, 0x52,
+	0x70, 0x82, 0x22, 0x94, 0x0c, 0xa8, 0xb5, 0xf0, 0x21, 0xf8, 0x5f, 0xf2, 0x0d, 0xf1, 0xb4, 0xb3,
+	0x39, 0xe2, 0x23, 0xe8, 0x7c, 0x65, 0xeb, 0xab, 0x9c, 0x74, 0x22, 0x94, 0xf8, 0xd4, 0x18, 0xf8,
+	0x09, 0x78, 0x0b, 0x45, 0xba, 0x11, 0x4a, 0xc2, 0xd1, 0x83, 0xd4, 0x00, 0xa4, 0x6f, 0xd7, 0x62,
+	0xce, 0xd6, 0xd3, 0x9a, 0x95, 0x92, 0x65, 0x6a, 0x25, 0x4a, 0xea, 0x2d, 0x14, 0x8e, 0x20, 0xc8,
+	0x44, 0xc9, 0x49, 0xa0, 0x83, 0xef, 0xb8, 0xe0, 0xb1, 0x28, 0x39, 0xd5, 0x37, 0x71, 0x0a, 0x41,
+	0x63, 0x39, 0x70, 0xb4, 0x07, 0xdc, 0x6b, 0x81, 0xc7, 0xbf, 0x3c, 0x18, 0xfe, 0x81, 0x85, 0x31,
+	0x04, 0xea, 0x7a, 0xe5, 0x0a, 0xd2, 0x67, 0xfc, 0x18, 0x82, 0xac, 0xe0, 0x52, 0xa7, 0x87, 0xa3,
+	0x7b, 0x0e, 0x9b, 0xb2, 0x4b, 0x65, 0x95, 0xa0, 0x3a, 0x00, 0x13, 0xe8, 0x65, 0x62, 0x29, 0x6a,
+	0x25, 0x89, 0x1f, 0xf9, 0xc9, 0x80, 0x3a, 0x13, 0x5f, 0xc0, 0x50, 0x2e, 0x59, 0xcd, 0x67, 0x4a,
+	0xcc, 0x32, 0x93, 0x23, 0x49, 0x10, 0xf9, 0x49, 0x38, 0x4a, 0x6f, 0x2d, 0x3c, 0xfd, 0xdc, 0xa4,
+	0x4c, 0x85, 0x05, 0x91, 0x6f, 0x4a, 0x55, 0x6f, 0xe8, 0x81, 0xbc, 0xe9, 0x6d, 0xca, 0xab, 0x96,
+	0x4c, 0x1a, 0x6d, 0x07, 0xd4, 0x18, 0xc7, 0x53, 0x38, 0xda, 0x97, 0xde, 0x96, 0xc7, 0x37, 0xf2,
+	0x3c, 0x6a, 0xcb, 0x13, 0x8e, 0x0e, 0x1d, 0x1f, 0x9d, 0xfe, 0xa1, 0x92, 0x56, 0xb0, 0x53, 0xef,
+	0x05, 0x8a, 0xbf, 0x23, 0xe8, 0x4d, 0xaf, 0x57, 0x7c, 0xc2, 0x2a, 0xfc, 0x14, 0xfc, 0x82, 0x55,
+	0x04, 0xe9, 0x2a, 0x88, 0xcb, 0xb2, 0xb7, 0xe9, 0x84, 0x55, 0x86, 0x6f, 0x13, 0x74, 0xfc, 0x09,
+	0xfa, 0xce, 0xb1, 0xa7, 0x41, 0x27, 0x37, 0x19, 0xfc, 0x65, 0x14, 0x5a, 0x54, 0xbe, 0x41, 0xdf,
+	0x31, 0xdc, 0xdb, 0xb5, 0x87, 0x00, 0x05, 0x93, 0x2a, 0xaf, 0x67, 0xbb, 0x59, 0x1c, 0x18, 0xcf,
+	0xfb, 0x7c, 0xb3, 0x6d, 0xaa, 0xff, 0xaf, 0xa6, 0x6e, 0xe5, 0x0d, 0x5a, 0xf2, 0xc6, 0x3f, 0x10,
+	0x84, 0xf4, 0xe3, 0x98, 0xe6, 0xb2, 0x12, 0xa5, 0xcc, 0x9b, 0x55, 0x90, 0x8a, 0xa9, 0x2b, 0xa9,
+	0x39, 0x74, 0xa8, 0xb5, 0x6e, 0x19, 0x7c, 0x0c, 0x01, 0xe3, 0xbc, 0xd6, 0xa3, 0x3f, 0xa0, 0xfa,
+	0xbc, 0xc3, 0xf1, 0x5b, 0x38, 0x76, 0x45, 0xbc, 0xff, 0x58, 0x91, 0xf8, 0x14, 0xc2, 0x16, 0x7b,
+	0xfc, 0x0c, 0xfa, 0xdb, 0x49, 0x33, 0x3d, 0x3a, 0xd8, 0x6d, 0x8d, 0x29, 0x70, 0x1b, 0x10, 0xbf,
+	0x84, 0xde, 0x3b, 0xb1, 0x2a, 0x27, 0x72, 0x81, 0x23, 0xf3, 0x9b, 0x57, 0x9c, 0xd7, 0xb9, 0x94,
+	0x56, 0xd2, 0xb6, 0x0b, 0xdf, 0x05, 0xef, 0xfc, 0xcc, 0x2a, 0xea, 0x9d, 0x9f, 0xbd, 0xee, 0x5f,
+	0xd8, 0xc7, 0x61, 0xde, 0xd5, 0x6f, 0xc5, 0xf3, 0xdf, 0x01, 0x00, 0x00, 0xff, 0xff, 0x46, 0x71,
+	0x60, 0xb5, 0x40, 0x04, 0x00, 0x00,
 }

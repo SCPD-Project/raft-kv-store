@@ -12,14 +12,14 @@ import (
 // TODO: Separate out the common code into a function
 
 // Get returns the value for the given key.
-func (c *Coordinator) Get(key string) (string, error) {
+func (c *Coordinator) Get(key string) (int64, error) {
 
 	c.log.Infof("Processing Get request %s", key)
-	var response common.RPCResponse
+	var response raftpb.RPCResponse
 	cmd := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{
-				Method: raftpb.GET,
+				Method: common.GET,
 				Key:    key,
 			},
 		},
@@ -28,12 +28,12 @@ func (c *Coordinator) Get(key string) (string, error) {
 	// Figure out
 	addr, _, err := c.FindLeader(key)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 
 	client, err := rpc.DialHTTP("tcp", addr)
 	if err != nil {
-		return "", err
+		return 0, err
 	}
 
 	err = client.Call("Cohort.ProcessCommands", cmd, &response)
@@ -43,14 +43,14 @@ func (c *Coordinator) Get(key string) (string, error) {
 }
 
 // Set sets the value for the given key.
-func (c *Coordinator) Set(key, value string) error {
+func (c *Coordinator) Set(key string, value int64) error {
 
 	c.log.Infof("Processing Set request: Key=%s Value=%s", key, value)
-	var response common.RPCResponse
+	var response raftpb.RPCResponse
 	cmd := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{
-				Method: raftpb.SET,
+				Method: common.SET,
 				Key:    key,
 				Value:  value,
 			},
@@ -75,11 +75,11 @@ func (c *Coordinator) Set(key, value string) error {
 func (c *Coordinator) Delete(key string) error {
 
 	c.log.Infof("Processing Delete request %s", key)
-	var response common.RPCResponse
+	var response raftpb.RPCResponse
 	cmd := &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{
-				Method: raftpb.DEL,
+				Method: common.DEL,
 				Key:    key,
 			},
 		},
@@ -101,12 +101,9 @@ func (c *Coordinator) Delete(key string) error {
 }
 
 // Transaction atomically executes the transaction .
-func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
+func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (string, error) {
 
 	c.log.Infof("Processing Transaction")
-	cmds := &raftpb.RaftCommand{
-		Commands: ops,
-	}
 
 	txid := xid.New().String()
 	gt := c.newGlobalTransaction(txid, cmds)
@@ -157,7 +154,7 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	// Commit
 	var commitResponses int
 	for _, shardOps := range gt.ShardToCommands {
-		// Relicate via Raft
+		// Replicate via Raft
 		c.txMap[txid].Phase = common.Commit
 		shardOps.Phase = common.Commit
 		if c.SendMessageToShard(shardOps) {
@@ -179,22 +176,22 @@ func (c *Coordinator) Transaction(ops []*raftpb.Command) (string, error) {
 	return txid, nil
 }
 
-func (c *Coordinator) newGlobalTransaction(txid string, cmds *raftpb.RaftCommand) *common.GlobalTransaction {
+func (c *Coordinator) newGlobalTransaction(txid string, cmds *raftpb.RaftCommand) *raftpb.GlobalTransaction {
 
-	gt := &common.GlobalTransaction{
+	gt := &raftpb.GlobalTransaction{
 		Txid:  txid,
 		Cmds:  cmds,
 		Phase: common.Prepare,
 	}
 
-	shardToCmds := make(map[int]*common.ShardOps)
+	shardToCmds := make(map[int64]*raftpb.ShardOps)
 
 	for _, cmd := range cmds.Commands {
 		shardID := c.GetShardID(cmd.Key)
 
 		if _, ok := shardToCmds[shardID]; !ok {
 
-			shardToCmds[shardID] = &common.ShardOps{
+			shardToCmds[shardID] = &raftpb.ShardOps{
 				Txid:      txid,
 				MasterKey: cmd.Key,
 				Phase:     common.Prepare,

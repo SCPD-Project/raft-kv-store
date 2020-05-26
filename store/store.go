@@ -33,7 +33,7 @@ type Store struct {
 	rpcAddress string
 
 	mu sync.Mutex
-	kv map[string]string // The key-value store for the system.
+	kv map[string]int64 // The key-value store for the system.
 
 	transactionInProgress bool
 	t                     sync.Mutex
@@ -65,7 +65,7 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSin
 		ID:                nodeID,
 		RaftAddress:       raftAddress,
 		RaftDir:           raftDir,
-		kv:                make(map[string]string),
+		kv:                make(map[string]int64),
 		log:               l,
 		rpcAddress:        rpcAddress,
 		persistKvDbConn:   persistDbConn,
@@ -88,7 +88,7 @@ func (s *Store) Start(joinHTTPAddress, id string) {
 	if joinHTTPAddress == "" {
 		return
 	}
-	var response common.RPCResponse
+	var response raftpb.RPCResponse
 	msg := &raftpb.JoinMsg{RaftAddress: s.RaftAddress, ID: id}
 
 	client, err := rpc.DialHTTP("tcp", joinHTTPAddress)
@@ -99,7 +99,6 @@ func (s *Store) Start(joinHTTPAddress, id string) {
 	err = client.Call("Cohort.ProcessJoin", msg, &response)
 	if err != nil {
 		s.log.Fatalf("Unable to join cluster: %s", err)
-
 	}
 }
 
