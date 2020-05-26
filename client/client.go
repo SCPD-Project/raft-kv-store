@@ -389,7 +389,7 @@ func (c *raftKVClient) Transaction() error {
 
 func (c *raftKVClient) txnToSingleCmd() error {
 	cmd := c.txnCmds.Commands[0]
-	switch c.txnCmds.Commands[0].Method {
+	switch cmd.Method {
 	case common.DEL:
 		return c.Delete(cmd.Key)
 	case common.SET:
