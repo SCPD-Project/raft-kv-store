@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/raft-kv-store/common"
-	"github.com/raft-kv-store/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
 	"github.com/jinzhu/copier"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
 )
 
 type fsm Coordinator
