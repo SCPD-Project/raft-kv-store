@@ -20,8 +20,8 @@ const (
 	LEADER = "leader"
 	EXIT   = "exit"
 	TXN    = "txn"
-	ADD    = "ADD"
-	SUB    = "SUB"
+	ADD    = "add"
+	SUB    = "sub"
 	ENDTXN = "end"
 
 	Prepare = "prepare"

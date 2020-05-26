@@ -59,13 +59,13 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 			msg = err.Error()
 		} else {
 			w.WriteHeader(http.StatusOK)
-			msg = fmt.Sprintf("Key=%s, Value=%s", key, val)
+			msg = fmt.Sprintf("Key=%s, Value=%d", key, val)
 		}
 
 		io.WriteString(w, msg)
 
 	case http.MethodPost:
-		var cmd *raftpb.Command
+		cmd := &raftpb.Command{}
 		if m, err := ioutil.ReadAll(r.Body); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			msg = fmt.Sprintf("failed to read %v", r.Body)
@@ -114,7 +114,7 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 	// ...so we convert it to a string by passing it through
 	// a buffer first. A 'costly' but useful process.
-	var cmds *raftpb.RaftCommand
+	cmds := &raftpb.RaftCommand{}
 	if m, err := ioutil.ReadAll(r.Body); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return

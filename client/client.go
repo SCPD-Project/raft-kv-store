@@ -46,7 +46,7 @@ type raftKVClient struct{
 	Terminate chan os.Signal
 	reader *bufio.Reader
 	inTxn bool
-	txnCmds raftpb.RaftCommand
+	txnCmds *raftpb.RaftCommand
 }
 
 func NewRaftKVClient(serverAddr string) *raftKVClient{
@@ -55,6 +55,7 @@ func NewRaftKVClient(serverAddr string) *raftKVClient{
 		serverAddr: addURLScheme(serverAddr),
 		Terminate : make(chan os.Signal, 1),
 		reader: bufio.NewReader(os.Stdin),
+		txnCmds : &raftpb.RaftCommand{},
 	}
 	return c
 }
@@ -91,7 +92,7 @@ func (c *raftKVClient) validCmd3(cmdArr []string, op string) error {
 		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key] [value]", op)
 	}
 	if _, ok := parseInt64(cmdArr[2]); ok != nil{
-		return fmt.Errorf("Invalid %s command. Error in parsing %s", op, cmdArr[2])
+		return fmt.Errorf("Invalid %s command. Error in parsing %s as numerical value", op, cmdArr[2])
 	}
 	return nil
 }
@@ -147,7 +148,7 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	switch cmdArr[0] {
 	case common.TXN:
 		c.inTxn = true
-		c.txnCmds = raftpb.RaftCommand{}
+		c.txnCmds = &raftpb.RaftCommand{}
 		fmt.Println("Entering transaction status")
 	case common.GET:
 		fmt.Println("Only set and delete command are available in transaction.")
@@ -317,10 +318,10 @@ func (c *raftKVClient) Delete(key string) error {
 }
 
 func (c *raftKVClient) Transaction() error{
-	fmt.Printf("Submitting %s\n", c.txnCmds)
+	fmt.Printf("Submitting %v\n", c.txnCmds)
 	var reqBody []byte
 	var err error
-	if reqBody, err = proto.Marshal(&c.txnCmds); err != nil {
+	if reqBody, err = proto.Marshal(c.txnCmds); err != nil {
 		return err
 	}
 	resp, err := c.newTxnRequest(reqBody)
