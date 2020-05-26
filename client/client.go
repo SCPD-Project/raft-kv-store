@@ -80,19 +80,19 @@ func (c *raftKVClient) readString() []string {
 	return cmdArr
 }
 
-func (c *raftKVClient) validCmd2(cmdArr []string, op string) error {
+func (c *raftKVClient) validCmd2(cmdArr []string) error {
 	if len(cmdArr) != 2 {
-		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key]", op)
+		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key]", cmdArr[0])
 	}
 	return nil
 }
 
-func (c *raftKVClient) validCmd3(cmdArr []string, op string) error {
+func (c *raftKVClient) validCmd3(cmdArr []string) error {
 	if len(cmdArr) != 3 {
-		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key] [value]", op)
+		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key] [value]", cmdArr[0])
 	}
 	if _, ok := parseInt64(cmdArr[2]); ok != nil {
-		return fmt.Errorf("Invalid %s command. Error in parsing %s as numerical value", op, cmdArr[2])
+		return fmt.Errorf("Invalid %s command. Error in parsing %s as numerical value", cmdArr[0], cmdArr[2])
 	}
 	return nil
 }
@@ -130,9 +130,9 @@ func (c *raftKVClient) validCmd(cmdArr []string) error {
 	}
 	switch cmdArr[0] {
 	case common.GET, common.DEL:
-		return c.validCmd2(cmdArr, cmdArr[0])
+		return c.validCmd2(cmdArr)
 	case common.SET, common.ADD, common.SUB:
-		return c.validCmd3(cmdArr, cmdArr[0])
+		return c.validCmd3(cmdArr)
 	case common.TXN:
 		return c.validTxn(cmdArr)
 	case common.ENDTXN:
@@ -150,8 +150,6 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 		c.inTxn = true
 		c.txnCmds = &raftpb.RaftCommand{}
 		fmt.Println("Entering transaction status")
-	case common.GET:
-		fmt.Println("Only set and delete command are available in transaction.")
 	case common.SET:
 		val, _ := parseInt64(cmdArr[2])
 		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
@@ -174,6 +172,8 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	case common.EXIT:
 		fmt.Println("Stop client")
 		os.Exit(0)
+	default:
+		fmt.Println("Only set and delete command are available in transaction.")
 	}
 }
 
