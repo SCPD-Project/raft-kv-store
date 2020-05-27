@@ -181,10 +181,10 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
 			Method: common.SET,
 			Key:    cmdArr[1],
-			Value:  currToKeyValue, // old value
+			Value:  currToKeyValue + amount, // old value
 			Cond: &raftpb.Cond{
 				Key: cmdArr[1],
-				Value: currToKeyValue + amount, // new value
+				Value: currToKeyValue, // old value
 			},
 		})
 	case common.SUB:
@@ -193,10 +193,10 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
 			Method: common.SET,
 			Key:    cmdArr[1],
-			Value:  currFromKeyValue, // old value
+			Value:  currFromKeyValue + amount, // new value
 			Cond: &raftpb.Cond{
 				Key: cmdArr[1],
-				Value: currFromKeyValue - amount, // new value
+				Value: currFromKeyValue, // old value
 			},
 		})
 	case common.ENDTXN:
@@ -245,14 +245,10 @@ func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 	}
 
 	for _, cmdRsp := range txnRsp.Commands {
-		if cmdRsp.Cond == nil {
-			return fmt.Errorf("invalid rsp from server for key: %s" +
-				"and so aborting the txn", cmdRsp.Key)
-		}
 		if cmdRsp.Cond.Key == fromKey {
-			currRaftServerValueFromKey = cmdRsp.Cond.Value
+			currRaftServerValueFromKey = cmdRsp.Value
 		} else if cmdRsp.Cond.Key == toKey {
-			currRaftServerValueToKey = cmdRsp.Cond.Value
+			currRaftServerValueToKey = cmdRsp.Value
 		}
 	}
 
