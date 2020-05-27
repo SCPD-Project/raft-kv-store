@@ -124,10 +124,14 @@ func (c *raftKVClient) validExit(cmdArr []string) error {
 	return nil
 }
 
-func (c *raftKVClient) validTransfer(cmdArr []string) error {
+// Simpler version of 'transfer' command, eg., Issuing `transfer x y 10` refers to
+// the longer version `transfer 10 from x to y`
+func (c *raftKVClient) validTxnTransfer(cmdArr []string) error {
 	if len(cmdArr) != 4 {
-		return errors.New("Invalid tansfer command. Correct syntax: transfer")
+		return fmt.Errorf("invalid %[1]s command. Correct syntax: %[1]s [fromKey] [toKey]" +
+			"[amount to be transferred [fromKey] to [toKey]]", cmdArr[0])
 	}
+
 	return nil
 }
 
@@ -146,8 +150,8 @@ func (c *raftKVClient) validCmd(cmdArr []string) error {
 		return c.validEndTxn(cmdArr)
 	case common.EXIT:
 		return c.validExit(cmdArr)
-	case raftpb.TRANSFER:
-		return c.validTransfer(cmdArr)
+	case common.TRANSFER:
+		return c.validTxnTransfer(cmdArr)
 	default:
 		return errors.New("Command not recognized.")
 	}
@@ -171,8 +175,30 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 			Method: common.DEL,
 			Key:    cmdArr[1],
 		})
-	case common.ADD, common.SUB:
-		fmt.Println("Not implemented")
+	case common.ADD:
+		amount, _ := parseInt64(cmdArr[3])
+		currToKeyValue, _ := parseInt64(cmdArr[2])
+		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
+			Method: common.SET,
+			Key:    cmdArr[1],
+			Value:  currToKeyValue, // old value
+			Cond: &raftpb.Cond{
+				Key: cmdArr[1],
+				Value: currToKeyValue + amount, // new value
+			},
+		})
+	case common.SUB:
+		amount, _ := parseInt64(cmdArr[3])
+		currFromKeyValue, _ := parseInt64(cmdArr[2])
+		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
+			Method: common.SET,
+			Key:    cmdArr[1],
+			Value:  currFromKeyValue, // old value
+			Cond: &raftpb.Cond{
+				Key: cmdArr[1],
+				Value: currFromKeyValue - amount, // new value
+			},
+		})
 	case common.ENDTXN:
 		if _, err := c.Transaction(); err != nil {
 			fmt.Println(err)
@@ -186,18 +212,24 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	}
 }
 
-type txnRsp struct {
-	key string
-	value int64
-}
-
-func (c *raftKVClient) TransferRun(cmdArr []string) error {
+func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 	fromKey := cmdArr[1]
 	toKey := cmdArr[2]
-	var fromValue int64
-	var toValue int64
-	amount, err := parseInt64(cmdArr[3])
+	transferAmount, err := parseInt64(cmdArr[3]); if err != nil {
+		return err
+	}
 
+	var currRaftServerValueFromKey int64
+	var currRaftServerValueToKey int64
+
+	/* Order of transactions to be sent to raft server. eg., transfer x y 5
+	* 1. Fetch values for the fromKey, toKey in a single transaction.
+	* 2. If successful, then send another transaction with the updated values for those keys.
+		  set x server_fetched_value - 5
+	      set y server_fetched_value + 5
+	* 3. If successful, return back to the client with a success, fail for all other cases.
+	*/
+	c.txnCmds = &raftpb.RaftCommand{}
 	c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
 		Method: common.GET,
 		Key:    cmdArr[1],
@@ -207,31 +239,49 @@ func (c *raftKVClient) TransferRun(cmdArr []string) error {
 		Key:    cmdArr[2],
 	})
 
-	// Send txn to he server & fetch the response
-	rsp, err := c.Transaction(); if err != nil {
-		fmt.Println(errors.New(string("failed to fetch values before txfr")))
+	// Send txn to the server & fetch the response
+	txnRsp, err := c.Transaction(); if err != nil {
+		return fmt.Errorf("failed with err: %s, so aborting the txn", err)
 	}
 
-	for _, value := range rsp.Commands {
-		if value.Cond.Key == fromKey {
-			fromValue = value.Cond.Value
-		} else if value.Cond.Key == toKey {
-			toValue = value.Cond.Value
+	for _, cmdRsp := range txnRsp.Commands {
+		if cmdRsp.Cond == nil {
+			return fmt.Errorf("invalid rsp from server for key: %s" +
+				"and so aborting the txn", cmdRsp.Key)
+		}
+		if cmdRsp.Cond.Key == fromKey {
+			currRaftServerValueFromKey = cmdRsp.Cond.Value
+		} else if cmdRsp.Cond.Key == toKey {
+			currRaftServerValueToKey = cmdRsp.Cond.Value
 		}
 	}
 
-	if fromValue < amount {
-		return fmt.Errorf("Insufficient funds and so cant proceed further")
+	if currRaftServerValueFromKey < transferAmount {
+		return fmt.Errorf("insufficient funds %d in key: %s and so aborting the txn",
+			currRaftServerValueFromKey, fromKey)
 	}
 
-	for _, value := range rsp.Commands {
-		if value.Cond.Key == fromKey {
-			fromValue = value.Cond.Value
-		} else if value.Cond.Key == toKey {
-			toValue = value.Cond.Value
-		}
+	c.txnCmds = &raftpb.RaftCommand{}
+	addCmdArr := []string{
+		common.ADD,
+		cmdArr[2],
+		string(currRaftServerValueToKey),
+		cmdArr[3],
+	}
+	c.TransactionRun(addCmdArr)
+	subCmdArr := []string{
+		common.SUB,
+		cmdArr[1],
+		string(currRaftServerValueFromKey),
+		cmdArr[3],
+	}
+	c.TransactionRun(subCmdArr)
+
+	_, err = c.Transaction(); if err != nil {
+		return fmt.Errorf("failed with err: %s, so aborting the txn", err)
 	}
 
+	return nil
 }
 
 func (c *raftKVClient) Run() {
@@ -266,7 +316,7 @@ func (c *raftKVClient) Run() {
 		case common.TXN:
 			c.TransactionRun(cmdArr)
 		case common.TRANSFER:
-			c.TransferRun(cmdArr)
+			c.TransferTransaction(cmdArr)
 		case common.EXIT:
 			fmt.Println("Stop client")
 			os.Exit(0)
@@ -412,7 +462,7 @@ func (c *raftKVClient) OptimizeTxnCommands() {
 	c.txnCmds.Commands = newCmds
 }
 
-func (c *raftKVClient) Transaction() (rspValues *raftpb.RaftCommand, err2 error) {
+func (c *raftKVClient) Transaction() (txnRsp *raftpb.RaftCommand, err2 error) {
 	oldLen := len(c.txnCmds.Commands)
 	c.OptimizeTxnCommands()
 	newLen := len(c.txnCmds.Commands)
@@ -424,7 +474,7 @@ func (c *raftKVClient) Transaction() (rspValues *raftpb.RaftCommand, err2 error)
 	}
 
 	if newLen == 1 {
-		return c.txnToSingleCmd()
+		return nil, c.txnToSingleCmd()
 	}
 
 	fmt.Printf("Submitting %v\n", c.txnCmds.Commands)
@@ -436,15 +486,15 @@ func (c *raftKVClient) Transaction() (rspValues *raftpb.RaftCommand, err2 error)
 	resp, err := c.newTxnRequest(reqBody)
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
-	cmdRsp := &raftpb.RaftCommand{}
+	txnCmdRsp := &raftpb.RaftCommand{}
 	if err != nil {
 		return nil, err
-	} else if err = proto.Unmarshal(body, cmdRsp); err != nil {
+	} else if err = proto.Unmarshal(body, txnCmdRsp); err != nil {
 		return nil, err
 	}
 	if resp.StatusCode == http.StatusOK {
 		fmt.Println("OK")
-		return rspValues, nil
+		return txnCmdRsp, nil
 	}
 	return nil, errors.New(string(body))
 }
