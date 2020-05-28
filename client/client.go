@@ -129,7 +129,7 @@ func (c *raftKVClient) validExit(cmdArr []string) error {
 func (c *raftKVClient) validTxnTransfer(cmdArr []string) error {
 	if len(cmdArr) != 4 {
 		return fmt.Errorf("invalid %[1]s command. Correct syntax: %[1]s [fromKey] [toKey]" +
-			"[amount to be transferred] [fromKey] to [toKey]]", cmdArr[0])
+			"[amount to be transferred]", cmdArr[0])
 	}
 
 	return nil
