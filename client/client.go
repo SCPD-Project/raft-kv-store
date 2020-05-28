@@ -124,12 +124,12 @@ func (c *raftKVClient) validExit(cmdArr []string) error {
 	return nil
 }
 
-// Simpler version of 'transfer' command, eg., Issuing `transfer x y 10` refers to
-// the longer version `transfer 10 from x to y`
+// Simpler version of 'transfer' command, eg., Issuing `transfer x y 10` is translated
+// to `transfer 10 from x to y`
 func (c *raftKVClient) validTxnTransfer(cmdArr []string) error {
 	if len(cmdArr) != 4 {
 		return fmt.Errorf("invalid %[1]s command. Correct syntax: %[1]s [fromKey] [toKey]" +
-			"[amount to be transferred [fromKey] to [toKey]]", cmdArr[0])
+			"[amount to be transferred] [fromKey] to [toKey]]", cmdArr[0])
 	}
 
 	return nil
@@ -212,6 +212,7 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	}
 }
 
+// TODO: Add back-off retries in case of failures
 func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 	fromKey := cmdArr[1]
 	toKey := cmdArr[2]
@@ -245,9 +246,9 @@ func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 	}
 
 	for _, cmdRsp := range txnRsp.Commands {
-		if cmdRsp.Cond.Key == fromKey {
+		if cmdRsp.Key == fromKey {
 			currRaftServerValueFromKey = cmdRsp.Value
-		} else if cmdRsp.Cond.Key == toKey {
+		} else if cmdRsp.Key == toKey {
 			currRaftServerValueToKey = cmdRsp.Value
 		}
 	}
@@ -479,9 +480,13 @@ func (c *raftKVClient) Transaction() (txnRsp *raftpb.RaftCommand, err2 error) {
 	if reqBody, err = proto.Marshal(c.txnCmds); err != nil {
 		return nil, err
 	}
-	resp, err := c.newTxnRequest(reqBody)
+	resp, err := c.newTxnRequest(reqBody); if err != nil {
+		return nil, err
+	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body); if err != nil {
+		return nil, err
+	}
 	txnCmdRsp := &raftpb.RaftCommand{}
 	if err != nil {
 		return nil, err
