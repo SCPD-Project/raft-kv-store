@@ -111,7 +111,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 		if c.store.transactionInProgress {
 			*reply = raftpb.RPCResponse{
 				// TODO: use different status codes to give appropriate
-				// error to co-ordinator. For now, -1 is failure
+				// error to coordinator. For now, -1 is failure
 				Status: -1,
 				Phase:  common.NotPrepared,
 			}
