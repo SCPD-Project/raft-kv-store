@@ -20,7 +20,7 @@ import (
 	"github.com/raft-kv-store/common"
 	"github.com/raft-kv-store/raftpb"
 
-	"github.com/cenkalti/backoff/v3"
+	"github.com/cenkalti/backoff/v4"
 )
 
 var (
@@ -180,7 +180,7 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 			Key:    cmdArr[1],
 		})
 	case common.ADD, common.SUB:
-		fmt.Println("not implemented...")
+		fmt.Println("Not implemented")
 	case common.ENDTXN:
 		if _, err := c.Transaction(); err != nil {
 			fmt.Println(err)
