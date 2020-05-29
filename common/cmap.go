@@ -138,6 +138,14 @@ func (c *cmap) WriteWithLocks(ops []*raftpb.Command) {
 	}
 }
 
+func (c *cmap) AbortWithLocks(ops []*raftpb.Command) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, op := range ops {
+		c.Map[op.Key].mu.Unlock()
+	}
+}
+
 type naiveMap struct {
 	Map map[string]interface{}
 	sync.RWMutex

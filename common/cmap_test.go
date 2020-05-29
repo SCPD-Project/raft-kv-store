@@ -1,115 +1,161 @@
 package common
 
 import (
-	"strconv"
+	"fmt"
+	"github.com/raft-kv-store/raftpb"
+	"github.com/stretchr/testify/assert"
 	"testing"
-	"time"
 )
 
-const networkLatency = 1 * time.Nanosecond
+func TestCmap_TryLocks(t *testing.T) {
+	// TryLocks succeeds without intersected keys
+	m1 := NewCmap(0)
+	m1.Set("a", 1)
+	m1.Set("b", 2)
+	op1 := []*raftpb.Command{
+		{Method: SET, Key: "c", Value: 3},
+		{Method: DEL, Key: "d"},
+	}
+	m1.TryLocks(op1)
 
-func GetSet(m concurrentMap, finished chan struct{}) (set func(key string, value interface{}), get func(key string, value interface{})) {
-	return func(key string, value interface{}) {
-			for i := 0; i < 10; i++ {
-				m.Get(key)
-			}
-			finished <- struct{}{}
-		}, func(key string, value interface{}) {
-			for i := 0; i < 10; i++ {
-				m.benchmarkSet(key, value, networkLatency)
-			}
-			finished <- struct{}{}
-		}
-}
+	assert.True(t, m1.mu.TryLockTimeout(0), "Cmap should not be globally locked")
+	m1.mu.Unlock()
 
-func BenchmarkCmapGetSetDifferent(b *testing.B) {
-	m := NewCmap(0)
-	finished := make(chan struct{}, 2*b.N)
-	get, set := GetSet(m, finished)
-	m.Set("-1", "value")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go set(strconv.Itoa(i), "value")
-		go get(strconv.Itoa(i-1), "value")
+	for k, expected := range map[string]interface{}{"a": 1, "b": 2} {
+		actual, ok, err := m1.Get(k)
+		assert.Truef(t, err == nil, "no error should be expected for key %s", k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
 	}
-	for i := 0; i < 2*b.N; i++ {
-		<-finished
+	for k, expected := range map[string]interface{}{"c": nil, "d": nil} {
+		_, ok, err := m1.Get(k)
+		expectedErr := fmt.Errorf("map is locked on Key=%s", k)
+		assert.Truef(t, err.Error() == expectedErr.Error(), "Expected %s, but got %s for key %s", expectedErr.Error(), err.Error(), k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		m1.Map[k].mu.Unlock()
+		actual, _, _ := m1.Get(k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
 	}
-}
 
-func BenchmarkNaiveMapGetSetDifferent(b *testing.B) {
-	m := NewNaiveMap(0)
-	finished := make(chan struct{}, 2*b.N)
-	get, set := GetSet(m, finished)
-	m.Set("-1", "value")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go set(strconv.Itoa(i), "value")
-		go get(strconv.Itoa(i-1), "value")
+	// TryLocks succeeds with intersected keys locked
+	m2 := NewCmap(0)
+	m2.Set("a", 1)
+	m2.Set("b", 2)
+	op2 := []*raftpb.Command{
+		{Method: SET, Key: "b", Value: 3},
+		{Method: DEL, Key: "c"},
+		{Method: SET, Key: "d", Value: 4},
 	}
-	for i := 0; i < 2*b.N; i++ {
-		<-finished
-	}
-}
+	m2.TryLocks(op2)
 
-func BenchmarkCmapMultiInsertSame(b *testing.B) {
-	m := NewCmap(0)
-	finished := make(chan struct{}, b.N)
-	_, set := GetSet(m, finished)
-	m.Set("key", "value")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go set("key", "value")
-	}
-	for i := 0; i < b.N; i++ {
-		<-finished
-	}
-}
+	assert.True(t, m2.mu.TryLockTimeout(0), "Cmap should not be globally locked")
+	m2.mu.Unlock()
 
-func BenchmarkNaiveMapMultiInsertSame(b *testing.B) {
-	m := NewNaiveMap(0)
-	finished := make(chan struct{}, b.N)
-	_, set := GetSet(m, finished)
-	m.Set("key", "value")
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go set("key", "value")
+	for k, expected := range map[string]interface{}{"a": 1} {
+		actual, ok, err := m2.Get(k)
+		assert.Truef(t, err == nil, "no error should be expected for key %s", k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
 	}
-	for i := 0; i < b.N; i++ {
-		<-finished
+	for k, expected := range map[string]interface{}{"b": 2} {
+		actual, ok, err := m2.Get(k)
+		expectedErr := fmt.Errorf("map is locked on Key=%s", k)
+		assert.Truef(t, err.Error() == expectedErr.Error(), "Expected %s, but got %s for key %s", expectedErr.Error(), err.Error(), k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		m2.Map[k].mu.Unlock()
+		actual, _, _ = m2.Get(k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
 	}
-}
+	for k, expected := range map[string]interface{}{"c": nil, "d": nil} {
+		_, ok, err := m2.Get(k)
+		expectedErr := fmt.Errorf("map is locked on Key=%s", k)
+		assert.Truef(t, err.Error() == expectedErr.Error(), "Expected %s, but got %s for key %s", expectedErr.Error(), err.Error(), k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		m2.Map[k].mu.Unlock()
+		actual, _, _ := m2.Get(k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
+	}
 
-func BenchmarkCmapMultiGetSetBlock(b *testing.B) {
-	m := NewCmap(0)
-	finished := make(chan struct{}, 2*b.N)
-	get, set := GetSet(m, finished)
-	for i := 0; i < b.N; i++ {
-		m.Set(strconv.Itoa(i%100), "value")
+	// TryLocks fails with intersected keys locked
+	m3 := NewCmap(0)
+	m3.Set("a", 1)
+	m3.Set("b", 2)
+	m3.Set("c", 6)
+	m3.Set("d", 5)
+	m3.Map["a"].mu.Lock()
+	m3.Map["d"].mu.Lock()
+	op3 := []*raftpb.Command{
+		{Method: SET, Key: "b", Value: 3},
+		{Method: DEL, Key: "a"},
+		{Method: SET, Key: "c", Value: 4},
+		{Method: SET, Key: "e", Value: 7},
+		{Method: SET, Key: "f", Value: 8},
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go set(strconv.Itoa(i%100), "value")
-		go get(strconv.Itoa(i%100), "value")
-	}
-	for i := 0; i < 2*b.N; i++ {
-		<-finished
-	}
-}
+	m3.TryLocks(op3)
 
-func BenchmarkNaiveMapMultiGetSetBlock(b *testing.B) {
-	m := NewNaiveMap(0)
-	finished := make(chan struct{}, 2*b.N)
-	get, set := GetSet(m, finished)
-	for i := 0; i < b.N; i++ {
-		m.Set(strconv.Itoa(i%100), "value")
+	assert.True(t, m3.mu.TryLockTimeout(0), "Cmap should not be globally locked")
+	m3.mu.Unlock()
+
+	for k, expected := range map[string]interface{}{"a": 1, "d": 5} {
+		actual, ok, err := m3.Get(k)
+		expectedErr := fmt.Errorf("map is locked on Key=%s", k)
+		assert.Truef(t, err.Error() == expectedErr.Error(), "Expected %s, but got %s for key %s", expectedErr.Error(), err.Error(), k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		m3.Map[k].mu.Unlock()
+		actual, _, _ = m3.Get(k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
 	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		go set(strconv.Itoa(i%100), "value")
-		go get(strconv.Itoa(i%100), "value")
+	for k, expected := range map[string]interface{}{"b": 2, "c": 6} {
+		actual, ok, err := m3.Get(k)
+		assert.Truef(t, err == nil, "Not error is expected for key %s", k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
 	}
-	for i := 0; i < 2*b.N; i++ {
-		<-finished
+	for k, _ := range map[string]interface{}{"e": nil, "f": nil} {
+		_, ok, err := m3.Get(k)
+		assert.Truef(t, err == nil, "Not error is expected for key %s", k)
+		assert.Truef(t, !ok, "Value should not exist for key %s", k)
+	}
+
+	// TryLocks fails with global lock
+	m4 := NewCmap(0)
+	m4.Set("a", 1)
+	m4.Set("b", 2)
+	m4.Set("c", 6)
+	m4.Set("d", 5)
+	m4.Map["a"].mu.Lock()
+	m4.Map["d"].mu.Lock()
+	m4.mu.Lock()
+	op4 := []*raftpb.Command{
+		{Method: SET, Key: "b", Value: 3},
+		{Method: DEL, Key: "a"},
+		{Method: SET, Key: "c", Value: 4},
+		{Method: SET, Key: "e", Value: 7},
+		{Method: SET, Key: "f", Value: 8},
+	}
+	m4.TryLocks(op4)
+
+	assert.True(t, !m4.mu.TryLockTimeout(0), "Cmap should be globally locked")
+	m4.mu.Unlock()
+
+	for k, expected := range map[string]interface{}{"a": 1, "d": 5} {
+		actual, ok, err := m4.Get(k)
+		expectedErr := fmt.Errorf("map is locked on Key=%s", k)
+		assert.Truef(t, err.Error() == expectedErr.Error(), "Expected %s, but got %s for key %s", expectedErr.Error(), err.Error(), k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		m4.Map[k].mu.Unlock()
+		actual, _, _ = m4.Get(k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
+	}
+	for k, expected := range map[string]interface{}{"b": 2, "c": 6} {
+		actual, ok, err := m4.Get(k)
+		assert.Truef(t, err == nil, "Not error is expected for key %s", k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
+	}
+	for k, _ := range map[string]interface{}{"e": nil, "f": nil} {
+		_, ok, err := m4.Get(k)
+		assert.Truef(t, err == nil, "Not error is expected for key %s", k)
+		assert.Truef(t, !ok, "Value should not exist for key %s", k)
 	}
 }
