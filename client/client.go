@@ -208,13 +208,12 @@ func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 	retryable := func() error {
 		shldRetry, err := c.attemptTxfer(fromKey, toKey, transferAmount)
 		if !shldRetry && err != nil {
-			fmt.Printf("error: %v, aborting the txn\n", err)
 			return nil
-		} else if !shldRetry {
+		} else if shldRetry {
+			return err
+		} else {
 			fmt.Printf("txfr succeeded from %s to %s\n", fromKey, toKey)
 			return nil
-		} else {
-			return err
 		}
 	}
 
@@ -225,7 +224,7 @@ func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 	shldRetry, err := c.attemptTxfer(fromKey, toKey, transferAmount)
 	if !shldRetry && err != nil {
 		return err
-	} else if shldRetry && err != nil {
+	} else if shldRetry {
 		fmt.Printf("error: %v, retrying....\n", err)
 		err = backoff.RetryNotify(retryable, b, notify)
 		if err != nil {
@@ -264,6 +263,7 @@ func (c *raftKVClient) attemptTxfer(fromKey, toKey string, transferAmount int64)
 	// Send txn to the server & fetch the response
 	getTxnRsp, err := c.Transaction()
 	if err != nil {
+		// network errors
 		return true, fmt.Errorf("get txn failed with err: %s, so aborting the txn", err)
 	}
 
