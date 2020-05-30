@@ -262,17 +262,24 @@ func (c *raftKVClient) attemptTxfer(fromKey, toKey string, transferAmount int64)
 	})
 
 	// Send txn to the server & fetch the response
-	txnRsp, err := c.Transaction()
+	getTxnRsp, err := c.Transaction()
 	if err != nil {
-		fmt.Errorf("get txn failed with err: %s", err)
-		return true, err
+		return true, fmt.Errorf("get txn failed with err: %s, so aborting the txn", err)
 	}
 
-	for _, cmdRsp := range txnRsp.Commands {
+	for _, cmdRsp := range getTxnRsp.Commands {
 		if cmdRsp.Key == fromKey {
-			currRaftServerValueFromKey = cmdRsp.Value
+			if cmdRsp.Value > 0 {
+				currRaftServerValueFromKey = cmdRsp.Value
+			} else {
+				return false, fmt.Errorf("get failed for key: %s, so aborting the txn", fromKey)
+			}
 		} else if cmdRsp.Key == toKey {
-			currRaftServerValueToKey = cmdRsp.Value
+			if cmdRsp.Value > 0 {
+				currRaftServerValueToKey = cmdRsp.Value
+			} else {
+				return false, fmt.Errorf("get failed for key: %s, so aborting the txn", toKey)
+			}
 		}
 	}
 
@@ -282,10 +289,12 @@ func (c *raftKVClient) attemptTxfer(fromKey, toKey string, transferAmount int64)
 	}
 
 	c.txnCmds = &raftpb.RaftCommand{}
+	newToKeyValue :=  currRaftServerValueToKey + transferAmount
+	newFromKeyValue := currRaftServerValueFromKey - transferAmount
 	c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
 		Method: common.SET,
 		Key:    fromKey,
-		Value:  currRaftServerValueFromKey - transferAmount, // new value
+		Value:  newFromKeyValue, // new value
 		Cond: &raftpb.Cond{
 			Key:   fromKey,
 			Value: currRaftServerValueFromKey, // old value
@@ -293,16 +302,25 @@ func (c *raftKVClient) attemptTxfer(fromKey, toKey string, transferAmount int64)
 	}, &raftpb.Command{
 		Method: common.SET,
 		Key:    toKey,
-		Value:  currRaftServerValueToKey + transferAmount, // new value
+		Value:  newToKeyValue, // new value
 		Cond: &raftpb.Cond{
 			Key:   toKey,
 			Value: currRaftServerValueToKey, // old value
 		},
 	})
 
-	_, err = c.Transaction()
+	setTxnRsp, err := c.Transaction()
 	if err != nil {
+		// network issues, retry
 		return true, fmt.Errorf("set txn failed with err: %s", err)
+	}
+
+	for _, cmdRsp := range setTxnRsp.Commands {
+		if cmdRsp.Key == fromKey && cmdRsp.Value != newFromKeyValue {
+			return false, fmt.Errorf("set failed for key: %s", fromKey)
+		} else if cmdRsp.Key == toKey && cmdRsp.Value != newToKeyValue {
+			return false, fmt.Errorf("set failed for key: %s", toKey)
+		}
 	}
 
 	return false, nil
