@@ -5,7 +5,6 @@ go 1.14
 require (
 	github.com/antonfisher/nested-logrus-formatter v1.1.0
 	github.com/boltdb/bolt v1.3.1
-	github.com/cenkalti/backoff/v4 v4.0.2
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.3
 	github.com/google/go-cmp v0.4.1

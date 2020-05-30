@@ -20,14 +20,22 @@ import (
 	"github.com/raft-kv-store/common"
 	"github.com/raft-kv-store/raftpb"
 
-	"github.com/cenkalti/backoff/v4"
 )
 
 var (
 	CmdRegex = regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)\n`)
 )
 
-const maxTxferElapsedTime = 45 * time.Second
+const maxTransferRetries = 5
+
+type insufficientFundsError struct {
+	key string
+	amount int64
+}
+
+func (err *insufficientFundsError) Error() string {
+	return fmt.Sprintf("insufficient funds: %d in %s", err.amount, err.key)
+}
 
 func parseInt64(s string) (int64, error) {
 	return strconv.ParseInt(s, 10, 64)
@@ -136,6 +144,10 @@ func (c *raftKVClient) validTxnTransfer(cmdArr []string) error {
 			"[amount to be transferred]", cmdArr[0])
 	}
 
+	if _, ok := parseInt64(cmdArr[3]); ok != nil {
+		return fmt.Errorf("invalid %s command. Error in parsing %s as numerical value", cmdArr[0], cmdArr[3])
+	}
+
 	return nil
 }
 
@@ -197,52 +209,36 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 	fromKey := cmdArr[1]
 	toKey := cmdArr[2]
-	transferAmount, err := parseInt64(cmdArr[3])
-	if transferAmount == 0 || err != nil {
-		return fmt.Errorf("invalid transfer amount %s, so aborting the txn", cmdArr[3])
+	transferAmount, _ := parseInt64(cmdArr[3])
+	var err error
+
+	if transferAmount == 0 {
+		return fmt.Errorf("invalid transfer amount %d, so aborting the txn", transferAmount)
 	}
 
-	b := backoff.NewExponentialBackOff()
-	b.MaxElapsedTime = maxTxferElapsedTime
-
-	retryable := func() error {
-		shldRetry, err := c.attemptTxfer(fromKey, toKey, transferAmount)
-		if !shldRetry && err != nil {
-			return nil
-		} else if shldRetry {
-			return err
-		} else {
-			fmt.Printf("txfr succeeded from %s to %s\n", fromKey, toKey)
-			return nil
-		}
-	}
-
-	notify := func(err error, t time.Duration) {
-		fmt.Printf("error: %v, retrying...\n", err)
-	}
-
-	shldRetry, err := c.attemptTxfer(fromKey, toKey, transferAmount)
-	if !shldRetry && err != nil {
-		return err
-	} else if shldRetry {
-		fmt.Printf("error: %v, retrying....\n", err)
-		err = backoff.RetryNotify(retryable, b, notify)
+	retries := 0
+	for retries < maxTransferRetries {
+		err = c.attemptTransfer(fromKey, toKey, transferAmount)
 		if err != nil {
-			fmt.Printf("error: %v\n", err)
-			return fmt.Errorf("retries limit reached, aborting txn")
+			retries++
+			var e *insufficientFundsError
+			if errors.As(err, &e) {
+				return fmt.Errorf("%s, so aborting the txn", err)
+			}
+			fmt.Printf("%s\n Retrying...\n", err)
+		} else {
+			fmt.Printf("xfer succeeded from %s to %s\n", fromKey, toKey)
+			return nil
 		}
-	} else {
-		fmt.Printf("txfr succeeded from %s to %s\n", fromKey, toKey)
-		return nil
 	}
 
-	return nil
+	return fmt.Errorf("%s\n retries exhausted, aborting txn", err)
 }
 
-func (c *raftKVClient) attemptTxfer(fromKey, toKey string, transferAmount int64) (bool, error) {
+func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int64) error {
 
-	var currRaftServerValueFromKey int64
-	var currRaftServerValueToKey int64
+	var fromValue int64
+	var toValue int64
 
 	/* Order of transactions to be sent to raft server. eg., transfer x y 5
 	* 1. Fetch values for the fromKey, toKey in a single transaction.
@@ -251,79 +247,54 @@ func (c *raftKVClient) attemptTxfer(fromKey, toKey string, transferAmount int64)
 	      set y server_fetched_value + 5
 	* 3. If successful, return back to the client with a success, fail for all other cases.
 	*/
-	c.txnCmds = &raftpb.RaftCommand{}
-	c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
-		Method: common.GET,
-		Key:    fromKey,
-	}, &raftpb.Command{
-		Method: common.GET,
-		Key:    toKey,
-	})
+	c.txnCmds = &raftpb.RaftCommand {
+		Commands: []*raftpb.Command{
+			{Method: common.GET, Key: fromKey},
+			{Method: common.GET, Key: toKey},
+		},
+	}
 
 	// Send txn to the server & fetch the response
 	getTxnRsp, err := c.Transaction()
 	if err != nil {
-		// network errors
-		return true, fmt.Errorf("get txn failed with err: %s, so aborting the txn", err)
+		return fmt.Errorf("get txn failed with err: %s", err.Error())
 	}
 
 	for _, cmdRsp := range getTxnRsp.Commands {
 		if cmdRsp.Key == fromKey {
-			if cmdRsp.Value > 0 {
-				currRaftServerValueFromKey = cmdRsp.Value
-			} else {
-				return false, fmt.Errorf("get failed for key: %s, so aborting the txn", fromKey)
-			}
+			fromValue = cmdRsp.Value
 		} else if cmdRsp.Key == toKey {
-			if cmdRsp.Value > 0 {
-				currRaftServerValueToKey = cmdRsp.Value
-			} else {
-				return false, fmt.Errorf("get failed for key: %s, so aborting the txn", toKey)
-			}
+			toValue = cmdRsp.Value
 		}
 	}
 
-	if currRaftServerValueFromKey < transferAmount {
-		return false, fmt.Errorf("insufficient funds %d in key: %s, so aborting the txn",
-			currRaftServerValueFromKey, fromKey)
+	if fromValue < transferAmount {
+		return fmt.Errorf("%w", &insufficientFundsError {key: fromKey, amount: transferAmount})
 	}
 
-	c.txnCmds = &raftpb.RaftCommand{}
-	newToKeyValue :=  currRaftServerValueToKey + transferAmount
-	newFromKeyValue := currRaftServerValueFromKey - transferAmount
-	c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
-		Method: common.SET,
-		Key:    fromKey,
-		Value:  newFromKeyValue, // new value
-		Cond: &raftpb.Cond{
-			Key:   fromKey,
-			Value: currRaftServerValueFromKey, // old value
+	c.txnCmds = &raftpb.RaftCommand {
+		Commands: []*raftpb.Command{
+			{ Method: common.SET, Key: fromKey, Value: fromValue - transferAmount, // new value
+				Cond: &raftpb.Cond{
+					Key:   fromKey,
+					Value: fromValue, // old value
+				},
+			},
+			{ Method: common.SET, Key: toKey, Value: toValue + transferAmount, // new value
+				Cond: &raftpb.Cond{
+					Key:   toKey,
+					Value: toValue, // old value
+				},
+			},
 		},
-	}, &raftpb.Command{
-		Method: common.SET,
-		Key:    toKey,
-		Value:  newToKeyValue, // new value
-		Cond: &raftpb.Cond{
-			Key:   toKey,
-			Value: currRaftServerValueToKey, // old value
-		},
-	})
+	}
 
-	setTxnRsp, err := c.Transaction()
+	_, err = c.Transaction()
 	if err != nil {
-		// network issues, retry
-		return true, fmt.Errorf("set txn failed with err: %s", err)
+		return fmt.Errorf("set txn failed with err: %s", err.Error())
 	}
 
-	for _, cmdRsp := range setTxnRsp.Commands {
-		if cmdRsp.Key == fromKey && cmdRsp.Value != newFromKeyValue {
-			return false, fmt.Errorf("set failed for key: %s", fromKey)
-		} else if cmdRsp.Key == toKey && cmdRsp.Value != newToKeyValue {
-			return false, fmt.Errorf("set failed for key: %s", toKey)
-		}
-	}
-
-	return false, nil
+	return nil
 }
 
 func (c *raftKVClient) Run() {
