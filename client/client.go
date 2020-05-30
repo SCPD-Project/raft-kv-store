@@ -19,7 +19,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/raft-kv-store/common"
 	"github.com/raft-kv-store/raftpb"
-
 )
 
 var (
@@ -29,7 +28,7 @@ var (
 const maxTransferRetries = 5
 
 type insufficientFundsError struct {
-	key string
+	key    string
 	amount int64
 }
 
@@ -247,7 +246,7 @@ func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int
 	      set y server_fetched_value + 5
 	* 3. If successful, return back to the client with a success, fail for all other cases.
 	*/
-	c.txnCmds = &raftpb.RaftCommand {
+	c.txnCmds = &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{Method: common.GET, Key: fromKey},
 			{Method: common.GET, Key: toKey},
@@ -269,18 +268,18 @@ func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int
 	}
 
 	if fromValue < transferAmount {
-		return fmt.Errorf("%w", &insufficientFundsError {key: fromKey, amount: transferAmount})
+		return fmt.Errorf("%w", &insufficientFundsError{key: fromKey, amount: transferAmount})
 	}
 
-	c.txnCmds = &raftpb.RaftCommand {
+	c.txnCmds = &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
-			{ Method: common.SET, Key: fromKey, Value: fromValue - transferAmount, // new value
+			{Method: common.SET, Key: fromKey, Value: fromValue - transferAmount, // new value
 				Cond: &raftpb.Cond{
 					Key:   fromKey,
 					Value: fromValue, // old value
 				},
 			},
-			{ Method: common.SET, Key: toKey, Value: toValue + transferAmount, // new value
+			{Method: common.SET, Key: toKey, Value: toValue + transferAmount, // new value
 				Cond: &raftpb.Cond{
 					Key:   toKey,
 					Value: toValue, // old value
