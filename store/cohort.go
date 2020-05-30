@@ -10,10 +10,10 @@ import (
 	"net/rpc"
 	"sync"
 
-	"github.com/raft-kv-store/common"
-	"github.com/raft-kv-store/raftpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
 )
 
 // Cohort maintains state of the cohort state machine. It also starts
@@ -63,7 +63,7 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *raftpb.
 			if val, ok := c.store.kv[command.Key]; ok {
 				*reply = raftpb.RPCResponse{
 					Status: 0,
-					Value: val,
+					Value:  val,
 				}
 				return nil
 			} else {
@@ -77,7 +77,7 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *raftpb.
 			if c.store.raft.State() == raft.Leader {
 				*reply = raftpb.RPCResponse{
 					Status: 0,
-					Addr:  c.store.rpcAddress,
+					Addr:   c.store.rpcAddress,
 				}
 			} else {
 				*reply = raftpb.RPCResponse{
@@ -120,18 +120,27 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 			return fmt.Errorf("Not prepared")
 		}
 
+		// lock is held above
+
+		resultCmds, result := c.store.CheckDataConflicts(ops)
+		*reply = raftpb.RPCResponse{
+			Status:   0,
+			Phase:    result,
+			Commands: resultCmds,
+		}
+
+		// No need for a lock for readonly. Any inconsistency
+		// gets resolved by conditional set. Note that the
+		// transaction is read-only, only if it is read-only across
+		// all shards.
+		if !ops.ReadOnly {
+			c.store.transactionInProgress = true
+		}
 		// below should be raft call, once raft is setup.
 		ops.Phase = common.Prepared
 		// This should be replicated via raft with raft Apply, once setup
 		// if raft fails, send NotPrepared. log 2 pc message
 		c.opsMap[ops.Txid] = ops
-
-		// lock is held above
-		c.store.transactionInProgress = true
-		*reply = raftpb.RPCResponse{
-			Status: 0,
-			Phase:  common.Prepared,
-		}
 
 	case common.Commit:
 		c.mu.Lock()
@@ -179,7 +188,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 		c.store.transactionInProgress = false
 		*reply = raftpb.RPCResponse{
 			Status: 0,
-			Phase: common.Aborted,
+			Phase:  common.Aborted,
 		}
 
 	}
@@ -191,4 +200,47 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 func (c *Cohort) ProcessJoin(joinMsg *raftpb.JoinMsg, reply *raftpb.RPCResponse) error {
 
 	return c.store.Join(joinMsg.ID, joinMsg.RaftAddress)
+}
+
+// CheckDataConflicts  checks if the requests have any data conflicts for set
+// operations in a transaction. For get operations, it returns the result. If no
+// conflicts, it returns success and declares that cohort is prepared.
+func (s *Store) CheckDataConflicts(ops *raftpb.ShardOps) ([]*raftpb.Command, string) {
+
+	resultCmds := []*raftpb.Command{}
+
+	if ops.Cmds == nil {
+		return nil, common.NotPrepared
+	}
+
+	for _, cmd := range ops.Cmds.Commands {
+
+		switch cmd.Method {
+		case common.GET:
+			if val, ok := s.kv[cmd.Key]; ok {
+				resultCmds = append(resultCmds, &raftpb.Command{
+					Method: cmd.Method,
+					Key:    cmd.Key,
+					Value:  val,
+				})
+			} else {
+				// key does not exist
+				return nil, common.NotPrepared
+			}
+
+		case common.SET:
+			if val, ok := s.kv[cmd.Key]; ok {
+				// check conditions
+				c := cmd.GetCond()
+				if c != nil && val != c.Value {
+					// conflict
+					return nil, common.NotPrepared
+				}
+			}
+			resultCmds = append(resultCmds, cmd)
+
+		}
+	}
+
+	return resultCmds, common.Prepared
 }

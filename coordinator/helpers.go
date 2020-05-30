@@ -64,28 +64,29 @@ func (c *Coordinator) FindLeader(key string) (string, int64, error) {
 // SendMessageToShard sends prepare message to a shard. The return value
 // indicates if the shard successfully performed the operation. This returns bool
 // as the caller need not care of the exact error
-func (c *Coordinator) SendMessageToShard(ops *raftpb.ShardOps) bool {
+func (c *Coordinator) SendMessageToShard(ops *raftpb.ShardOps) ([]*raftpb.Command, bool) {
 
 	var response raftpb.RPCResponse
 
 	// Figure out leader for the shard
 	addr, _, err := c.FindLeader(ops.MasterKey)
 	if err != nil {
-		return false
+		c.log.Error(err)
+		return nil, false
 	}
 
 	// TODO: Add retries, time out handled by library.
 	client, err := rpc.DialHTTP("tcp", addr)
 	if err != nil {
 		c.log.Error(err)
-		return false
+		return nil, false
 	}
 
 	err = client.Call("Cohort.ProcessTransactionMessages", ops, &response)
 	if err != nil {
 		c.log.Error(err)
-		return false
+		return nil, false
 	}
-	return response.Phase == (common.Prepared) || response.Phase == (common.Committed) || response.Phase == (common.Aborted)
-
+	success := response.Phase == (common.Prepared) || response.Phase == (common.Committed) || response.Phase == (common.Aborted)
+	return response.Commands, success
 }
