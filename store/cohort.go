@@ -105,7 +105,8 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *raftpb.
 		return err
 	}
 
-	if resp := applyFuture.Response().(*FSMApplyResponse); resp.err != nil {
+	resp, ok := applyFuture.Response().(*FSMApplyResponse)
+	if ok && resp.err != nil {
 		*reply = resp.reply
 		return resp.err
 	}

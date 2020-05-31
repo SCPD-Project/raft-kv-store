@@ -140,7 +140,9 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 		}
 		if readOnly{
 			resultCmds.Commands = append(resultCmds.Commands, cmds...)
-			readOnlyErr = err
+			if err != nil {
+				readOnlyErr = err
+			}
 		}
 	}
 	if readOnly {

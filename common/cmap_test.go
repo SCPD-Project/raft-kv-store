@@ -194,6 +194,7 @@ func TestCmap_WriteWithLocks(t *testing.T) {
 		{Method: SET, Key: "a", Value: 3},
 		{Method: SET, Key: "b", Value: 4},
 	}
+	m1.TryLocks(op1)
 	m1.WriteWithLocks(op1)
 	assert.True(t, m1.mu.TryLockTimeout(0), "Cmap should not be globally locked")
 	m1.mu.Unlock()
