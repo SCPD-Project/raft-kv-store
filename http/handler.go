@@ -39,7 +39,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 
 	var msg string
-	if s.coordinator.IsLeader() {
+	if !s.coordinator.IsLeader() {
 		msg = fmt.Sprint("Not a leader")
 		w.WriteHeader(http.StatusBadRequest)
 		io.WriteString(w, msg)
@@ -119,7 +119,7 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 	var msg string
 
-	if s.coordinator.IsLeader() {
+	if !s.coordinator.IsLeader() {
 		msg = fmt.Sprint("Not a leader")
 		w.WriteHeader(http.StatusBadRequest)
 		io.WriteString(w, msg)
