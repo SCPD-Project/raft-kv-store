@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/raft-kv-store/raftpb"
 	"github.com/golang/protobuf/proto"
+	"github.com/raft-kv-store/raftpb"
 )
 
 func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
@@ -120,14 +120,21 @@ func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 	} else if err = proto.Unmarshal(m, cmds); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 	}
-	_, err := s.coordinator.Transaction(cmds)
+	resultCmds, err := s.coordinator.Transaction(cmds)
+	if err != nil {
+		s.log.Error(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	respBody, err := proto.Marshal(resultCmds)
 	if err != nil {
 		s.log.Error(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-
+	w.Write(respBody)
 }
 
 // Addr returns the address on which the Service is listening

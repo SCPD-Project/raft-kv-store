@@ -36,6 +36,7 @@ message ShardOps {
     string master_key = 2;
     RaftCommand cmds = 3;
     string phase = 4;
+    bool readOnly = 5;
 }
 
 message RPCResponse {
@@ -43,6 +44,8 @@ message RPCResponse {
     int64 value = 2;
     string addr = 3;
     string phase = 4;
+    repeated Command commands = 5;
+    
 }
 
 message RaftCommand {
