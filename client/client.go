@@ -29,7 +29,7 @@ var (
 const maxTransferRetries = 5
 
 type insufficientFundsError struct {
-	key    string
+	key            string
 	remain, expect int64
 }
 
@@ -191,8 +191,6 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 			Method: common.DEL,
 			Key:    cmdArr[1],
 		})
-	case common.ADD, common.SUB:
-		fmt.Println("Not implemented")
 	case common.ENDTXN:
 		if _, err := c.Transaction(); err != nil {
 			fmt.Println(err)
@@ -220,8 +218,7 @@ func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 		return fmt.Errorf("Invalid transfer amount %d, so aborting the txn", transferAmount)
 	}
 
-
-	retries := 0
+	var retries int
 	for retries < maxTransferRetries {
 		err = c.attemptTransfer(fromKey, toKey, transferAmount)
 		if err != nil {
@@ -257,12 +254,13 @@ func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int
 			{Method: common.GET, Key: fromKey},
 			{Method: common.GET, Key: toKey},
 		},
+		IsTxn: true,
 	}
 
 	// Send txn to the server & fetch the response
 	getTxnRsp, err := c.Transaction()
 	if err != nil {
-		return fmt.Errorf("txn err: %s", err.Error())
+		return fmt.Errorf("get txn err failed with err: %s", err.Error())
 	}
 
 	for _, cmdRsp := range getTxnRsp.Commands {
@@ -292,6 +290,7 @@ func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int
 				},
 			},
 		},
+		IsTxn: true,
 	}
 
 	_, err = c.Transaction()
@@ -330,7 +329,9 @@ func (c *raftKVClient) Run() {
 				fmt.Println(err)
 			}
 		case common.ADD, common.SUB:
-			fmt.Println("Not implemented")
+			if err := c.AddTransaction(cmdArr); err != nil {
+				fmt.Println(err)
+			}
 		case common.TXN:
 			c.TransactionRun(cmdArr)
 		case common.TRANSFER:
@@ -482,6 +483,66 @@ func (c *raftKVClient) OptimizeTxnCommands() {
 	c.txnCmds.Commands = newCmds
 }
 
+func (c *raftKVClient) AddTransaction(cmdArr []string ) error {
+	amount, _ := parseInt64(cmdArr[2])
+	if amount == 0 {
+		return errors.New("Non-zero value expected")
+	}
+	if cmdArr[0] == common.SUB {
+		amount = -amount
+	}
+	var retries int
+	for retries < maxTransferRetries {
+		if err := c.attemptAdd(cmdArr[1], amount); err != nil {
+			retries++
+			fmt.Printf("%s\nRetrying %d times...\n", err, retries)
+		} else {
+			if cmdArr[0] == common.ADD {
+				color.HiGreen("ADD successful")
+			} else {
+				color.HiGreen("SUB successful")
+			}
+			return nil
+		}
+	}
+	return errors.New("Retries exhausted, aborting")
+}
+
+func (c *raftKVClient) attemptAdd(key string, amount int64) error {
+	c.txnCmds = &raftpb.RaftCommand{
+		Commands: []*raftpb.Command{
+			{Method: common.GET, Key: key},
+		},
+		IsTxn: true,
+	}
+
+	// Send txn to the server & fetch the response
+	getTxnRsp, err := c.Transaction()
+	if err != nil {
+		return fmt.Errorf("get txn err failed with err: %s", err.Error())
+	}
+	var oldValue int64
+	for _, cmdRsp := range getTxnRsp.Commands {
+		if cmdRsp.Key == key {
+			oldValue = cmdRsp.Value
+		}
+	}
+	c.txnCmds = &raftpb.RaftCommand{
+		Commands: []*raftpb.Command{
+			{Method: common.SET, Key: key, Value: oldValue + amount, // new value
+				Cond: &raftpb.Cond{Key: key, Value: oldValue},
+			},
+		},
+		IsTxn: true,
+	}
+	_, err = c.Transaction()
+	if err != nil {
+		return fmt.Errorf("set txn failed with err: %s", err.Error())
+	}
+
+	return nil
+}
+
 func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 	oldLen := len(c.txnCmds.Commands)
 	c.OptimizeTxnCommands()
@@ -492,11 +553,12 @@ func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 	} else if newLen < oldLen {
 		fmt.Printf("Optimized txn to: %v \n", c.txnCmds.Commands)
 	}
-
-	if newLen == 1 {
+	// Only call single shard handler if len == 1 and isTxn flag is False
+	if newLen == 1 && !c.txnCmds.IsTxn {
 		return nil, c.txnToSingleCmd()
 	}
 	// To ensure handled by transaction instead of single shard handler
+	// All txnCmds should be handled by transaction if getting here
 	c.txnCmds.IsTxn = true
 	fmt.Printf("Submitting %v\n", c.txnCmds.Commands)
 	var reqBody []byte
