@@ -30,11 +30,11 @@ const maxTransferRetries = 5
 
 type insufficientFundsError struct {
 	key    string
-	amount int64
+	remain, expect int64
 }
 
 func (err *insufficientFundsError) Error() string {
-	return fmt.Sprintf("insufficient funds: %d in %s", err.amount, err.key)
+	return fmt.Sprintf("Insufficient funds: %d < %d in %s", err.remain, err.expect, err.key)
 }
 
 func parseInt64(s string) (int64, error) {
@@ -210,14 +210,14 @@ func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 	fromKey := cmdArr[1]
 	toKey := cmdArr[2]
 	if fromKey == toKey {
-		return fmt.Errorf("invalid transfer for same key %s", fromKey)
+		return fmt.Errorf("Invalid transfer for same key %s", fromKey)
 	}
 
 	transferAmount, _ := parseInt64(cmdArr[3])
 	var err error
 
 	if transferAmount == 0 {
-		return fmt.Errorf("invalid transfer amount %d, so aborting the txn", transferAmount)
+		return fmt.Errorf("Invalid transfer amount %d, so aborting the txn", transferAmount)
 	}
 
 
@@ -228,7 +228,7 @@ func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 			retries++
 			var e *insufficientFundsError
 			if errors.As(err, &e) {
-				return fmt.Errorf("%s, so aborting the txn", err)
+				return fmt.Errorf("%s, aborting txn", err)
 			}
 			fmt.Printf("%s\nRetrying %d times...\n", err, retries)
 		} else {
@@ -274,7 +274,7 @@ func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int
 	}
 
 	if fromValue < transferAmount {
-		return fmt.Errorf("%w", &insufficientFundsError{key: fromKey, amount: transferAmount})
+		return fmt.Errorf("%w", &insufficientFundsError{key: fromKey, expect: transferAmount, remain: fromValue})
 	}
 
 	c.txnCmds = &raftpb.RaftCommand{
