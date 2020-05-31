@@ -69,6 +69,7 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			msg = fmt.Sprintf("Key=%s, Value=%d", key, val)
 		}
+		io.WriteString(w, msg)
 
 	case http.MethodPost:
 		cmd := &raftpb.Command{}
@@ -120,8 +121,9 @@ func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 	var msg string
 
 	if s.coordinator.Raft.State() != raft.Leader {
+		msg = fmt.Sprintf("Not a leader")
 		w.WriteHeader(http.StatusBadRequest)
-		return
+		io.WriteString(w, msg)
 	}
 
 	// ...so we convert it to a string by passing it through

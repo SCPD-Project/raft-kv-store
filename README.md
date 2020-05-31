@@ -27,6 +27,8 @@ bin/kv -i node-5 -l :15002 -r :16002 -j :15000
 ## Start Coordinator (Only 1 for now)
 ```
 bin/kv -i node-6 -l :17000 -r :18000 -c
+bin/kv -i node-7 -l :17001 -r :18001 -c -j :17000
+bin/kv -i node-8 -l :17002 -r :18002 -c -j :17000
 ```
 
 ## Start Client
