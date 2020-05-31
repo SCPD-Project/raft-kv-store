@@ -55,7 +55,7 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *raftpb.
 	// No need to go to raft for Get/Leader cmds
 	c.store.log.Info("Processing rpc call", raftCommand)
 	if len(raftCommand.Commands) != 1 {
-		c.store.log.Fatalf("Unexpected cmd %+v", raftCommand)
+		c.store.log.Errorf("Unexpected cmd %+v", raftCommand)
 	}
 	command := raftCommand.Commands[0]
 	switch command.Method {
