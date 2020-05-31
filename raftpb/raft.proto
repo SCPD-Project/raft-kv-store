@@ -25,6 +25,8 @@ message GlobalTransaction {
     repeated string cohorts = 3;
     map<int64, ShardOps> shard_to_commands = 4;
     string phase = 5;
+    // required to clean up and recover transactions
+    int64 startTime = 6;
 }
 
 message TxidMap {

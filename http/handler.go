@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/hashicorp/raft"
 	"github.com/raft-kv-store/raftpb"
 )
 
@@ -38,6 +39,14 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 
 func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 
+	var msg string
+	if s.coordinator.Raft.State() != raft.Leader {
+		msg = fmt.Sprintf("Not a leader")
+		w.WriteHeader(http.StatusBadRequest)
+		io.WriteString(w, msg)
+		return
+	}
+
 	getKey := func(path string) string {
 		parts := strings.SplitN(path, "/", 3)
 		if len(parts) != 3 {
@@ -45,7 +54,7 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 		}
 		return parts[2]
 	}
-	var msg string
+
 	switch r.Method {
 	case http.MethodGet:
 		key := getKey(r.URL.Path)
@@ -60,8 +69,6 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 			msg = fmt.Sprintf("Key=%s, Value=%d", key, val)
 		}
-
-		io.WriteString(w, msg)
 
 	case http.MethodPost:
 		cmd := &raftpb.Command{}
@@ -111,6 +118,14 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 // handleTransaction
 func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 	var msg string
+
+	if s.coordinator.Raft.State() != raft.Leader {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// ...so we convert it to a string by passing it through
+	// a buffer first. A 'costly' but useful process.
 	cmds := &raftpb.RaftCommand{}
 	if m, err := ioutil.ReadAll(r.Body); err != nil {
 		w.WriteHeader(http.StatusBadRequest)

@@ -152,14 +152,16 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 
 	c.log.Infof("[txid %s] Prepared sent", txid)
 
-	if prepareResponses != numShards && !readOnly {
+	if prepareResponses != numShards {
 		// send abort and report error.
 		// abort will help release the locks
 		// on the shards.
 		c.log.Infof("[txid %s] Aborting\n", txid)
 		gt.Phase = common.Abort
 		// replicate via raft
-		c.txMap[txid] = gt
+		if err := c.Replicate(txid, common.SET, gt); err != nil {
+			c.log.Infof("[txid: %s] failed to set Abort state: %s", txid, err)
+		}
 
 		var err error
 		for _, shardops := range gt.ShardToCommands {
@@ -177,18 +179,36 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 
 	// c.log the prepared phase and replicate it
 	gt.Phase = common.Prepared
-	c.txMap[txid] = gt
+	if err := c.Replicate(txid, common.SET, gt); err != nil {
+		c.log.Infof("[txid: %s] failed to set Prepared state: %s", txid, err)
+		return nil, fmt.Errorf("unable to complete transaction: %s", err)
+	}
+
 	// TODO(imp):if the above replication fails via raft,
 	// this usually means majority of nodes in the coordinator
 	// cluster are faulty (partition or down). In that case,
-	// retry on error.
+	// retry on error. This will be done via clean up goroutine
+
+	// Comment: In general, there is nothing much that can be
+	// done on raft failures. A transaction recovery go-routine
+	// that runs periodically (TODO) and does the following
+	// 1. if transaction is not in commit state (meaning commit message not sent
+	// to shards), after t seconds (some constant), send an abort and release locks
+	// 2. if transaction is in commit state, keep trying to send commit and complete
+	// the transaction.
 
 	// Commit
 	var commitResponses int
 	for _, shardOps := range gt.ShardToCommands {
 		// Replicate via Raft
-		c.txMap[txid].Phase = common.Commit
+		gt.Phase = common.Commit
 		shardOps.Phase = common.Commit
+
+		if err := c.Replicate(txid, common.SET, gt); err != nil {
+			c.log.Infof("[txid: %s] failed to set commit state: %s", txid, err)
+			return nil, fmt.Errorf("unable to complete transaction: %s", err)
+		}
+
 		if _, err := c.SendMessageToShard(shardOps); err == nil {
 			commitResponses++
 		}
@@ -198,7 +218,12 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 	// TODO (not important): this can be garbage collected in a separate go-routine, once all acks have
 	// been recieved
 	gt.Phase = common.Committed
-	c.txMap[txid] = gt
+	if err := c.Replicate(txid, common.SET, gt); err != nil {
+		c.log.Infof("[txid: %s] failed to set commited state: %s", txid, err)
+		// Note: there is no need to return with an error here, At this point, the cohorts have
+		// already got the commit message. From the client perspective, this transaction
+		// is successfull.
+	}
 
 	// wait for all acks since client should complete replication as
 	// well. not required.
@@ -247,7 +272,7 @@ func (c *Coordinator) newGlobalTransaction(txid string, cmds *raftpb.RaftCommand
 func (c *Coordinator) Join(nodeID, addr string) error {
 	c.log.Infof("received join request for remote node %s at %s", nodeID, addr)
 
-	configFuture := c.raft.GetConfiguration()
+	configFuture := c.Raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
 		c.log.Errorf("failed to get raft configuration: %v", err)
 		return err
@@ -264,14 +289,14 @@ func (c *Coordinator) Join(nodeID, addr string) error {
 				return nil
 			}
 
-			future := c.raft.RemoveServer(srv.ID, 0, 0)
+			future := c.Raft.RemoveServer(srv.ID, 0, 0)
 			if err := future.Error(); err != nil {
 				return fmt.Errorf("error removing existing node %s at %s: %s", nodeID, addr, err)
 			}
 		}
 	}
 
-	f := c.raft.AddVoter(raft.ServerID(nodeID), raft.ServerAddress(addr), 0, 0)
+	f := c.Raft.AddVoter(raft.ServerID(nodeID), raft.ServerAddress(addr), 0, 0)
 	if f.Error() != nil {
 		return f.Error()
 	}
