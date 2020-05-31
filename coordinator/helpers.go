@@ -69,20 +69,22 @@ func (c *Coordinator) SendMessageToShard(ops *raftpb.ShardOps) bool {
 	// Figure out leader for the shard
 	addr, _, err := c.FindLeader(ops.MasterKey)
 	if err != nil {
-		return false
+		c.log.Error(err)
+		return nil, false
 	}
 
 	// TODO: Add retries, time out handled by library.
 	client, err := rpc.DialHTTP("tcp", addr)
 	if err != nil {
 		c.log.Error(err)
-		return false
+		return nil, false
 	}
 
 	err = client.Call("Cohort.ProcessTransactionMessages", ops, &response)
 	if err != nil {
 		c.log.Error(err)
-		return false
+		return nil, false
 	}
-	return response.Phase == (common.Prepared) || response.Phase == (common.Committed) || response.Phase == (common.Aborted)
+	success := response.Phase == (common.Prepared) || response.Phase == (common.Committed) || response.Phase == (common.Aborted)
+	return response.Commands, success
 }

@@ -25,6 +25,17 @@ var (
 	CmdRegex = regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)\n`)
 )
 
+const maxTransferRetries = 5
+
+type insufficientFundsError struct {
+	key    string
+	amount int64
+}
+
+func (err *insufficientFundsError) Error() string {
+	return fmt.Sprintf("insufficient funds: %d in %s", err.amount, err.key)
+}
+
 func parseInt64(s string) (int64, error) {
 	return strconv.ParseInt(s, 10, 64)
 }
@@ -124,6 +135,21 @@ func (c *raftKVClient) validExit(cmdArr []string) error {
 	return nil
 }
 
+// Simpler version of 'transfer' command, eg., Issuing `transfer x y 10` is translated
+// to `transfer 10 from x to y`
+func (c *raftKVClient) validTxnTransfer(cmdArr []string) error {
+	if len(cmdArr) != 4 {
+		return fmt.Errorf("invalid %[1]s command. Correct syntax: %[1]s [fromKey] [toKey] "+
+			"[amount to be transferred]", cmdArr[0])
+	}
+
+	if _, ok := parseInt64(cmdArr[3]); ok != nil {
+		return fmt.Errorf("invalid %s command. Error in parsing %s as numerical value", cmdArr[0], cmdArr[3])
+	}
+
+	return nil
+}
+
 func (c *raftKVClient) validCmd(cmdArr []string) error {
 	if len(cmdArr) == 0 {
 		return errors.New("")
@@ -139,6 +165,8 @@ func (c *raftKVClient) validCmd(cmdArr []string) error {
 		return c.validEndTxn(cmdArr)
 	case common.EXIT:
 		return c.validExit(cmdArr)
+	case common.TRANSFER:
+		return c.validTxnTransfer(cmdArr)
 	default:
 		return errors.New("Command not recognized.")
 	}
@@ -165,7 +193,7 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	case common.ADD, common.SUB:
 		fmt.Println("Not implemented")
 	case common.ENDTXN:
-		if err := c.Transaction(); err != nil {
+		if _, err := c.Transaction(); err != nil {
 			fmt.Println(err)
 		}
 		c.inTxn = false
@@ -175,6 +203,97 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	default:
 		fmt.Println("Only set and delete command are available in transaction.")
 	}
+}
+
+func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
+	fromKey := cmdArr[1]
+	toKey := cmdArr[2]
+	transferAmount, _ := parseInt64(cmdArr[3])
+	var err error
+
+	if transferAmount == 0 {
+		return fmt.Errorf("invalid transfer amount %d, so aborting the txn", transferAmount)
+	}
+
+	retries := 0
+	for retries < maxTransferRetries {
+		err = c.attemptTransfer(fromKey, toKey, transferAmount)
+		if err != nil {
+			retries++
+			var e *insufficientFundsError
+			if errors.As(err, &e) {
+				return fmt.Errorf("%s, so aborting the txn", err)
+			}
+			fmt.Printf("%s\n Retrying...\n", err)
+		} else {
+			fmt.Printf("xfer succeeded from %s to %s\n", fromKey, toKey)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("%s\n retries exhausted, aborting txn", err)
+}
+
+func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int64) error {
+
+	var fromValue int64
+	var toValue int64
+
+	/* Order of transactions to be sent to raft server. eg., transfer x y 5
+	* 1. Fetch values for the fromKey, toKey in a single transaction.
+	* 2. If successful, then send another transaction with the updated values for those keys.
+		  set x server_fetched_value - 5
+	      set y server_fetched_value + 5
+	* 3. If successful, return back to the client with a success, fail for all other cases.
+	*/
+	c.txnCmds = &raftpb.RaftCommand{
+		Commands: []*raftpb.Command{
+			{Method: common.GET, Key: fromKey},
+			{Method: common.GET, Key: toKey},
+		},
+	}
+
+	// Send txn to the server & fetch the response
+	getTxnRsp, err := c.Transaction()
+	if err != nil {
+		return fmt.Errorf("get txn failed with err: %s", err.Error())
+	}
+
+	for _, cmdRsp := range getTxnRsp.Commands {
+		if cmdRsp.Key == fromKey {
+			fromValue = cmdRsp.Value
+		} else if cmdRsp.Key == toKey {
+			toValue = cmdRsp.Value
+		}
+	}
+
+	if fromValue < transferAmount {
+		return fmt.Errorf("%w", &insufficientFundsError{key: fromKey, amount: transferAmount})
+	}
+
+	c.txnCmds = &raftpb.RaftCommand{
+		Commands: []*raftpb.Command{
+			{Method: common.SET, Key: fromKey, Value: fromValue - transferAmount, // new value
+				Cond: &raftpb.Cond{
+					Key:   fromKey,
+					Value: fromValue, // old value
+				},
+			},
+			{Method: common.SET, Key: toKey, Value: toValue + transferAmount, // new value
+				Cond: &raftpb.Cond{
+					Key:   toKey,
+					Value: toValue, // old value
+				},
+			},
+		},
+	}
+
+	_, err = c.Transaction()
+	if err != nil {
+		return fmt.Errorf("set txn failed with err: %s", err.Error())
+	}
+
+	return nil
 }
 
 func (c *raftKVClient) Run() {
@@ -208,6 +327,10 @@ func (c *raftKVClient) Run() {
 			fmt.Println("Not implemented")
 		case common.TXN:
 			c.TransactionRun(cmdArr)
+		case common.TRANSFER:
+			if err := c.TransferTransaction(cmdArr); err != nil {
+				fmt.Println(err)
+			}
 		case common.EXIT:
 			fmt.Println("Stop client")
 			os.Exit(0)
@@ -353,38 +476,45 @@ func (c *raftKVClient) OptimizeTxnCommands() {
 	c.txnCmds.Commands = newCmds
 }
 
-func (c *raftKVClient) Transaction() error {
+func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 	oldLen := len(c.txnCmds.Commands)
 	c.OptimizeTxnCommands()
 	newLen := len(c.txnCmds.Commands)
 	if newLen == 0 {
 		fmt.Println("txn takes no effect so not submitting to server")
-		return nil
+		return nil, nil
 	} else if newLen < oldLen {
 		fmt.Printf("Optimized txn to %v: \n", c.txnCmds.Commands)
 	}
 
 	if newLen == 1 {
-		return c.txnToSingleCmd()
+		return nil, c.txnToSingleCmd()
 	}
 
 	fmt.Printf("Submitting %v\n", c.txnCmds.Commands)
 	var reqBody []byte
 	var err error
 	if reqBody, err = proto.Marshal(c.txnCmds); err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := c.newTxnRequest(reqBody)
+	if err != nil {
+		return nil, err
+	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	txnCmdRsp := &raftpb.RaftCommand{}
+	if err = proto.Unmarshal(body, txnCmdRsp); err != nil {
+		return nil, err
 	}
 	if resp.StatusCode == http.StatusOK {
 		fmt.Println("OK")
-		return nil
+		return txnCmdRsp, nil
 	}
-	return errors.New(string(body))
+	return nil, errors.New(string(body))
 }
 
 func (c *raftKVClient) txnToSingleCmd() error {

@@ -23,6 +23,7 @@ const (
 	ADD    = "add"
 	SUB    = "sub"
 	ENDTXN = "end"
+	TRANSFER = "xfer"
 
 	Prepare = "prepare"
 	Commit  = "commit"
