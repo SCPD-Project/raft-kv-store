@@ -6,11 +6,11 @@ import (
 	"os"
 	"sync"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/hashicorp/raft"
 	"github.com/raft-kv-store/common"
 	"github.com/raft-kv-store/config"
 	"github.com/raft-kv-store/raftpb"
-	"github.com/golang/protobuf/proto"
-	"github.com/hashicorp/raft"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -48,8 +48,8 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 	log.Infof("Preparing node-%s with persistent directory %s, raftAddress %s", nodeID, raftDir, raftAddress)
 	os.MkdirAll(raftDir, 0700)
 
-	shardsInfo, err :=  config.GetShards()
-	if err!= nil {
+	shardsInfo, err := config.GetShards()
+	if err != nil {
 		log.Fatal(err)
 	}
 	shardToPeers := make(map[int64][]string)
@@ -90,7 +90,7 @@ func (c *Coordinator) Replicate(key, op string, gt *raftpb.GlobalTransaction) er
 				{
 					Method: op,
 					Key:    key,
-					Gt: gt,
+					Gt:     gt,
 				},
 			},
 		}

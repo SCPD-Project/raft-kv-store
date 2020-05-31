@@ -134,7 +134,6 @@ func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {
 	return s.ln.Addr()

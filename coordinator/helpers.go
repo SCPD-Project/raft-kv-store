@@ -60,7 +60,6 @@ func (c *Coordinator) FindLeader(key string) (string, int64, error) {
 	return "", -1, fmt.Errorf("shard %d is not reachable", shardID)
 }
 
-
 // SendMessageToShard sends prepare message to a shard. The return value
 // indicates if the shard successfully performed the operation.
 func (c *Coordinator) SendMessageToShard(ops *raftpb.ShardOps) ([]*raftpb.Command, error) {
@@ -90,4 +89,3 @@ func (c *Coordinator) SendMessageToShard(ops *raftpb.ShardOps) ([]*raftpb.Comman
 	}
 	return response.Commands, errors.New(response.Phase)
 }
-

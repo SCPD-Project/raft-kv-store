@@ -2,21 +2,19 @@ package main
 
 import (
 	"fmt"
-
-	"github.com/raft-kv-store/common"
-	httpd "github.com/raft-kv-store/http"
-	"github.com/raft-kv-store/store"
-	nested "github.com/antonfisher/nested-logrus-formatter"
-	log "github.com/sirupsen/logrus"
-	flag "github.com/spf13/pflag"
-
-	"github.com/raft-kv-store/coordinator"
-
 	"os"
 	"os/signal"
 	"path"
 	"runtime"
 	"strings"
+
+	nested "github.com/antonfisher/nested-logrus-formatter"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/coordinator"
+	httpd "github.com/raft-kv-store/http"
+	"github.com/raft-kv-store/store"
+	log "github.com/sirupsen/logrus"
+	flag "github.com/spf13/pflag"
 )
 
 const (
