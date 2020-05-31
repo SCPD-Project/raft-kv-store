@@ -8,7 +8,7 @@ import (
 
 const networkLatency = 1000 * time.Nanosecond
 
-func GetSet(m concurrentMap, finished chan struct{}) (set func(key string, value interface{}), get func(key string, value interface{})) {
+func GetSet(m ConcurrentMap, finished chan struct{}) (set func(key string, value interface{}), get func(key string, value interface{})) {
 	return func(key string, value interface{}) {
 			for i := 0; i < 10; i++ {
 				m.Get(key)
@@ -16,7 +16,7 @@ func GetSet(m concurrentMap, finished chan struct{}) (set func(key string, value
 			finished <- struct{}{}
 		}, func(key string, value interface{}) {
 			for i := 0; i < 10; i++ {
-				m.benchmarkSet(key, value, networkLatency)
+				m.benchmarkSet(key, value, nil, networkLatency)
 			}
 			finished <- struct{}{}
 		}

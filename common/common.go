@@ -25,11 +25,11 @@ const (
 	ENDTXN = "end"
 	TRANSFER = "xfer"
 
-	Prepare = "prepare"
-	Commit  = "commit"
+	Prepare = "Prepare"
+	Commit  = "Commit"
 
-	Prepared  = "prepared"
-	Committed = "committed"
+	Prepared  = "Prepared"
+	Committed = "Committed"
 	Aborted   = "Aborted"
 
 	NotPrepared = "NotPrepared"

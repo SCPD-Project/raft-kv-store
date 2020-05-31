@@ -1,6 +1,7 @@
 package coordinator
 
 import (
+	"errors"
 	"fmt"
 	"net/rpc"
 
@@ -19,9 +20,7 @@ func (c *Coordinator) GetShardID(key string) int64 {
 	return int64(h % nshards)
 }
 
-// Leader returns leader of a shard. This call is made
-// to any of the nodes in the shard to fetch latest
-// leader.
+// Leader returns rpc address if the cohort is leader, otherwise return empty string
 func (c *Coordinator) Leader(address string) (string, error) {
 
 	var response raftpb.RPCResponse
@@ -61,32 +60,34 @@ func (c *Coordinator) FindLeader(key string) (string, int64, error) {
 	return "", -1, fmt.Errorf("shard %d is not reachable", shardID)
 }
 
+
 // SendMessageToShard sends prepare message to a shard. The return value
-// indicates if the shard successfully performed the operation. This returns bool
-// as the caller need not care of the exact error
-func (c *Coordinator) SendMessageToShard(ops *raftpb.ShardOps) ([]*raftpb.Command, bool) {
-
+// indicates if the shard successfully performed the operation.
+func (c *Coordinator) SendMessageToShard(ops *raftpb.ShardOps) ([]*raftpb.Command, error) {
 	var response raftpb.RPCResponse
-
 	// Figure out leader for the shard
 	addr, _, err := c.FindLeader(ops.MasterKey)
 	if err != nil {
 		c.log.Error(err)
-		return nil, false
+		return nil, err
 	}
-
 	// TODO: Add retries, time out handled by library.
 	client, err := rpc.DialHTTP("tcp", addr)
 	if err != nil {
 		c.log.Error(err)
-		return nil, false
+		return nil, err
 	}
 
 	err = client.Call("Cohort.ProcessTransactionMessages", ops, &response)
 	if err != nil {
 		c.log.Error(err)
-		return nil, false
+		return nil, err
 	}
+
 	success := response.Phase == (common.Prepared) || response.Phase == (common.Committed) || response.Phase == (common.Aborted)
-	return response.Commands, success
+	if success {
+		return response.Commands, nil
+	}
+	return response.Commands, errors.New(response.Phase)
 }
+

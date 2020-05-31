@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	"github.com/golang/protobuf/proto"
 	"github.com/raft-kv-store/common"
 	"github.com/raft-kv-store/raftpb"
@@ -29,11 +30,11 @@ const maxTransferRetries = 5
 
 type insufficientFundsError struct {
 	key    string
-	amount int64
+	remain, expect int64
 }
 
 func (err *insufficientFundsError) Error() string {
-	return fmt.Sprintf("insufficient funds: %d in %s", err.amount, err.key)
+	return fmt.Sprintf("Insufficient funds: %d < %d in %s", err.remain, err.expect, err.key)
 }
 
 func parseInt64(s string) (int64, error) {
@@ -208,12 +209,17 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 	fromKey := cmdArr[1]
 	toKey := cmdArr[2]
+	if fromKey == toKey {
+		return fmt.Errorf("Invalid transfer for same key %s", fromKey)
+	}
+
 	transferAmount, _ := parseInt64(cmdArr[3])
 	var err error
 
 	if transferAmount == 0 {
-		return fmt.Errorf("invalid transfer amount %d, so aborting the txn", transferAmount)
+		return fmt.Errorf("Invalid transfer amount %d, so aborting the txn", transferAmount)
 	}
+
 
 	retries := 0
 	for retries < maxTransferRetries {
@@ -222,16 +228,16 @@ func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 			retries++
 			var e *insufficientFundsError
 			if errors.As(err, &e) {
-				return fmt.Errorf("%s, so aborting the txn", err)
+				return fmt.Errorf("%s, aborting txn", err)
 			}
-			fmt.Printf("%s\n Retrying...\n", err)
+			fmt.Printf("%s\nRetrying %d times...\n", err, retries)
 		} else {
-			fmt.Printf("xfer succeeded from %s to %s\n", fromKey, toKey)
+			color.HiGreen("XFER Successful")
 			return nil
 		}
 	}
 
-	return fmt.Errorf("%s\n retries exhausted, aborting txn", err)
+	return errors.New("Retries exhausted, aborting txn")
 }
 
 func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int64) error {
@@ -256,7 +262,7 @@ func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int
 	// Send txn to the server & fetch the response
 	getTxnRsp, err := c.Transaction()
 	if err != nil {
-		return fmt.Errorf("get txn failed with err: %s", err.Error())
+		return fmt.Errorf("txn err: %s", err.Error())
 	}
 
 	for _, cmdRsp := range getTxnRsp.Commands {
@@ -268,7 +274,7 @@ func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int
 	}
 
 	if fromValue < transferAmount {
-		return fmt.Errorf("%w", &insufficientFundsError{key: fromKey, amount: transferAmount})
+		return fmt.Errorf("%w", &insufficientFundsError{key: fromKey, expect: transferAmount, remain: fromValue})
 	}
 
 	c.txnCmds = &raftpb.RaftCommand{
@@ -391,7 +397,7 @@ func (c *raftKVClient) Get(key string) error {
 		return err
 	}
 	if resp.StatusCode == http.StatusOK {
-		fmt.Println(string(body))
+		color.HiGreen(string(body))
 		return nil
 	}
 	return errors.New(string(body))
@@ -417,7 +423,7 @@ func (c *raftKVClient) Set(key string, value int64) error {
 		return err
 	}
 	if resp.StatusCode == http.StatusOK {
-		fmt.Println("OK")
+		color.HiGreen("OK")
 		return nil
 	}
 	return errors.New(string(body))
@@ -434,7 +440,7 @@ func (c *raftKVClient) Delete(key string) error {
 		return err
 	}
 	if resp.StatusCode == http.StatusOK {
-		fmt.Println("OK")
+		color.HiGreen("OK")
 		return nil
 	}
 	return errors.New(string(body))
@@ -484,13 +490,14 @@ func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 		fmt.Println("txn takes no effect so not submitting to server")
 		return nil, nil
 	} else if newLen < oldLen {
-		fmt.Printf("Optimized txn to %v: \n", c.txnCmds.Commands)
+		fmt.Printf("Optimized txn to: %v \n", c.txnCmds.Commands)
 	}
 
 	if newLen == 1 {
 		return nil, c.txnToSingleCmd()
 	}
-
+	// To ensure handled by transaction instead of single shard handler
+	c.txnCmds.IsTxn = true
 	fmt.Printf("Submitting %v\n", c.txnCmds.Commands)
 	var reqBody []byte
 	var err error
@@ -508,10 +515,10 @@ func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 	}
 	txnCmdRsp := &raftpb.RaftCommand{}
 	if err = proto.Unmarshal(body, txnCmdRsp); err != nil {
-		return nil, err
+		return nil, errors.New(string(body))
 	}
 	if resp.StatusCode == http.StatusOK {
-		fmt.Println("OK")
+		color.HiGreen("OK")
 		return txnCmdRsp, nil
 	}
 	return nil, errors.New(string(body))

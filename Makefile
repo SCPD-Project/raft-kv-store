@@ -6,5 +6,4 @@ proto:
 	protoc -I=. --go_out=. raftpb/raft.proto
 
 clean:
-	rm -rf bin/
 	rm -rf node-*

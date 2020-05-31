@@ -130,3 +130,4 @@ func TestClient(t *testing.T) {
 	assert.Truef(t, cmp.Equal(expectedCmds, c.txnCmds), "Expected %v but got %v", expectedCmds, c.txnCmds)
 
 }
+

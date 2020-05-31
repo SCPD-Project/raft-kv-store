@@ -50,6 +50,8 @@ message RPCResponse {
 
 message RaftCommand {
     repeated Command commands = 1;
+    // To ensure handled by ApplyTransaction
+    bool is_txn = 2;
 }
 
 message JoinMsg {
