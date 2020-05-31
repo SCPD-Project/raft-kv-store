@@ -272,7 +272,7 @@ func (c *Coordinator) newGlobalTransaction(txid string, cmds *raftpb.RaftCommand
 func (c *Coordinator) Join(nodeID, addr string) error {
 	c.log.Infof("received join request for remote node %s at %s", nodeID, addr)
 
-	configFuture := c.Raft.GetConfiguration()
+	configFuture := c.raft.GetConfiguration()
 	if err := configFuture.Error(); err != nil {
 		c.log.Errorf("failed to get raft configuration: %v", err)
 		return err
@@ -289,14 +289,14 @@ func (c *Coordinator) Join(nodeID, addr string) error {
 				return nil
 			}
 
-			future := c.Raft.RemoveServer(srv.ID, 0, 0)
+			future := c.raft.RemoveServer(srv.ID, 0, 0)
 			if err := future.Error(); err != nil {
 				return fmt.Errorf("error removing existing node %s at %s: %s", nodeID, addr, err)
 			}
 		}
 	}
 
-	f := c.Raft.AddVoter(raft.ServerID(nodeID), raft.ServerAddress(addr), 0, 0)
+	f := c.raft.AddVoter(raft.ServerID(nodeID), raft.ServerAddress(addr), 0, 0)
 	if f.Error() != nil {
 		return f.Error()
 	}

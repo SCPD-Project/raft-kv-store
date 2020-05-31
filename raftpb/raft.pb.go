@@ -394,12 +394,11 @@ func (m *RPCResponse) GetCommands() []*Command {
 }
 
 type RaftCommand struct {
-	Commands []*Command `protobuf:"bytes,1,rep,name=commands,proto3" json:"commands,omitempty"`
-	// To ensure handled by ApplyTransaction
-	IsTxn                bool     `protobuf:"varint,2,opt,name=is_txn,json=isTxn,proto3" json:"is_txn,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Commands             []*Command `protobuf:"bytes,1,rep,name=commands,proto3" json:"commands,omitempty"`
+	IsTxn                bool       `protobuf:"varint,2,opt,name=is_txn,json=isTxn,proto3" json:"is_txn,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
+	XXX_unrecognized     []byte     `json:"-"`
+	XXX_sizecache        int32      `json:"-"`
 }
 
 func (m *RaftCommand) Reset()         { *m = RaftCommand{} }

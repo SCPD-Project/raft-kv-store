@@ -20,7 +20,7 @@ type Coordinator struct {
 	RaftAddress string
 	RaftDir     string
 
-	Raft *raft.Raft // The consensus mechanism
+	raft *raft.Raft // The consensus mechanism
 
 	// coordinator state - This has to be replicated.
 	// TODO: concurrent transactions
@@ -72,7 +72,7 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 		log.Fatalf("Unable to setup raft instance for kv store:%s", err)
 	}
 
-	c.Raft = ra
+	c.raft = ra
 
 	return c
 }
@@ -111,7 +111,13 @@ func (c *Coordinator) Replicate(key, op string, gt *raftpb.GlobalTransaction) er
 		return err
 	}
 
-	f := c.Raft.Apply(b, common.RaftTimeout)
+	f := c.raft.Apply(b, common.RaftTimeout)
 
 	return f.Error()
+}
+
+// IsLeader return if coordinator is leader of cluster.
+func (c *Coordinator) IsLeader() bool {
+
+	return c.raft.State() == raft.Leader
 }
