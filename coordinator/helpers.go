@@ -19,9 +19,7 @@ func (c *Coordinator) GetShardID(key string) int64 {
 	return int64(h % nshards)
 }
 
-// Leader returns leader of a shard. This call is made
-// to any of the nodes in the shard to fetch latest
-// leader.
+// Leader returns rpc address if the cohort is leader, otherwise return empty string
 func (c *Coordinator) Leader(address string) (string, error) {
 
 	var response raftpb.RPCResponse
@@ -87,5 +85,4 @@ func (c *Coordinator) SendMessageToShard(ops *raftpb.ShardOps) bool {
 		return false
 	}
 	return response.Phase == (common.Prepared) || response.Phase == (common.Committed) || response.Phase == (common.Aborted)
-
 }

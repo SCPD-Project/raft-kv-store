@@ -13,6 +13,12 @@ import (
 
 type fsm Store
 
+type FSMApplyResponse struct {
+	reply raftpb.RPCResponse
+	err error
+}
+
+
 // Apply applies a Raft log entry to the key-value store.
 func (f *fsm) Apply(l *raft.Log) interface{} {
 	var raftCommand raftpb.RaftCommand
@@ -23,10 +29,13 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 		command := raftCommand.Commands[0]
 		switch command.Method {
 		case common.SET:
-			return f.applySet(command.Key, command.Value)
+			if command.Cond == nil {
+				return f.applySet(command.Key, command.Value)
+			} else {
+				return f.applySetCond(command.Key, command.Value, command.Cond.Value)
+			}
 		case common.DEL:
 			return f.applyDelete(command.Key)
-
 		default:
 			panic(fmt.Sprintf("unrecognized command: %+v", command))
 		}
@@ -36,13 +45,12 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 
 // Snapshot returns a snapshot of the key-value store.
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	m := f.kv.Snapshot()
 
 	// Clone the map.
 	o := make(map[string]int64)
-	for k, v := range f.kv {
-		o[k] = v
+	for k, v := range m {
+		o[k] = v.(int64)
 	}
 
 	return &fsmSnapshot{store: o, persistDBConn: f.persistKvDbConn, bucketName: f.persistBucketName,
@@ -51,42 +59,65 @@ func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 
 // Restore stores the key-value store to a previous state.
 func (f *fsm) Restore(_ io.ReadCloser) error {
-	o := make(map[string]int64)
-	o = f.restore()
-	f.log.Infof(" Snapshot restore from bucket: %s with kv-size: %d", f.persistBucketName, len(o))
+	rst := make(map[string]int64)
+	rst = f.restore()
+	f.log.Infof(" Snapshot restore from bucket: %s with kv-size: %d", f.persistBucketName, len(rst))
 
 	// Set the state from the snapshot, no lock required according to
 	// Hashicorp docs.
-	f.kv = o
+	o := make(map[string]interface{})
+	for k, v := range rst {
+		o[k] = v
+	}
+	f.kv = common.NewCmapFromMap(o, LockContention)
 	return nil
 }
 
 func (f *fsm) applySet(key string, value int64) interface{} {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.kv[key] = value
+	if err := f.kv.Set(key, value); err != nil {
+		return &FSMApplyResponse{
+			reply: raftpb.RPCResponse{Status: 0},
+		}
+	} else {
+		return &FSMApplyResponse{
+			err: err,
+			reply: raftpb.RPCResponse{Status: -1},
+		}
+	}
+	return nil
+}
+
+func (f *fsm) applySetCond(key string, value, value0 int64) interface{} {
+	if err := f.kv.SetCond(key, value, value0); err != nil {
+		return &FSMApplyResponse{
+			reply: raftpb.RPCResponse{Status: 0},
+		}
+	} else {
+		return &FSMApplyResponse{
+			err: err,
+			reply: raftpb.RPCResponse{Status: -1},
+		}
+	}
 	return nil
 }
 
 func (f *fsm) applyDelete(key string) interface{} {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	delete(f.kv, key)
+	if err := f.kv.Del(key); err == nil {
+		return &FSMApplyResponse{
+			reply: raftpb.RPCResponse{Status: 0},
+		}
+	} else {
+		return &FSMApplyResponse{
+			err: err,
+			reply: raftpb.RPCResponse{Status: -1},
+		}
+	}
 	return nil
 }
 
 // return transaction result
 func (f *fsm) applyTransaction(ops []*raftpb.Command) interface{} {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, command := range ops {
-		switch command.Method {
-		case common.SET:
-			f.kv[command.Key] = command.Value
-		case common.DEL:
-			delete(f.kv, command.Key)
-		}
-	}
+	f.kv.WriteWithLocks(ops)
 	return nil
 }
 

@@ -9,19 +9,18 @@ package store
 
 import (
 	"fmt"
+	"github.com/hashicorp/raft"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
+	log "github.com/sirupsen/logrus"
 	"net/rpc"
 	"os"
 	"path/filepath"
-	"sync"
-
-	"github.com/raft-kv-store/common"
-	"github.com/raft-kv-store/raftpb"
-	"github.com/hashicorp/raft"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
 	SnapshotPersistFile = "persistedKeyValues.db"
+    LockContention = 0 // This can be change to test concurrentMap performance
 )
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.
@@ -32,11 +31,7 @@ type Store struct {
 
 	rpcAddress string
 
-	mu sync.Mutex
-	kv map[string]int64 // The key-value store for the system.
-
-	transactionInProgress bool
-	t                     sync.Mutex
+	kv *common.Cmap // The key-value store for the system.
 
 	raft              *raft.Raft // The consensus mechanism
 	log               *log.Entry
@@ -65,7 +60,7 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSin
 		ID:                nodeID,
 		RaftAddress:       raftAddress,
 		RaftDir:           raftDir,
-		kv:                make(map[string]int64),
+		kv:                common.NewCmap(LockContention),
 		log:               l,
 		rpcAddress:        rpcAddress,
 		persistKvDbConn:   persistDbConn,
