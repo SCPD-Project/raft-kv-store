@@ -9,14 +9,15 @@ package store
 
 import (
 	"fmt"
-	"github.com/hashicorp/raft"
-	"github.com/raft-kv-store/common"
-	"github.com/raft-kv-store/raftpb"
-	log "github.com/sirupsen/logrus"
 	"net/rpc"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/hashicorp/raft"
+	"github.com/raft-kv-store/common"
+	"github.com/raft-kv-store/raftpb"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
