@@ -1,10 +1,10 @@
 package raftpb
 
-import "github.com/raft-kv-store/common"
-
 func (r *RaftCommand) isReadOnly() bool {
 	for _, cmd := range r.Commands {
-		if cmd.Method != common.GET {
+		// TODO: temporary way to resolve circular imports
+		// Need to move const to separate package.
+		if cmd.Method != "get" {
 			return false
 		}
 	}
