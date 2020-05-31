@@ -11,9 +11,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/raft-kv-store/coordinator"
 	"github.com/raft-kv-store/raftpb"
-	"github.com/gogo/protobuf/proto"
 )
 
 // Service provides HTTP service.
@@ -83,7 +83,6 @@ func (s *Service) Close() {
 
 // ServeHTTP allows Service to serve HTTP requests.
 func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-
 	s.log.Infof("Serving request for path: %s\n", r.URL.Path)
 	if strings.HasPrefix(r.URL.Path, "/key") {
 		s.handleKeyRequest(w, r)

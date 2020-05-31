@@ -138,7 +138,7 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 		} else {
 			c.log.Infof("[txid %s] failed at %v with %s", txid, shardops, err.Error())
 		}
-		if readOnly{
+		if readOnly {
 			resultCmds.Commands = append(resultCmds.Commands, cmds...)
 			if err != nil {
 				readOnlyErr = err
@@ -150,10 +150,9 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 		return resultCmds, readOnlyErr
 	}
 
-
 	c.log.Infof("[txid %s] Prepared sent", txid)
 
-	if prepareResponses != numShards && !readOnly{
+	if prepareResponses != numShards && !readOnly {
 		// send abort and report error.
 		// abort will help release the locks
 		// on the shards.
@@ -175,7 +174,6 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 	}
 
 	c.log.Infof("[txid: %s] Prepared recieved: %d Prepared Expected: %d", txid, prepareResponses, numShards)
-
 
 	// c.log the prepared phase and replicate it
 	gt.Phase = common.Prepared
@@ -231,7 +229,7 @@ func (c *Coordinator) newGlobalTransaction(txid string, cmds *raftpb.RaftCommand
 				Phase:     common.Prepare,
 				Cmds: &raftpb.RaftCommand{
 					Commands: []*raftpb.Command{},
-					IsTxn: cmds.IsTxn,
+					IsTxn:    cmds.IsTxn,
 				},
 			}
 		}

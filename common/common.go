@@ -14,15 +14,15 @@ import (
 )
 
 const (
-	GET    = "get"
-	SET    = "set"
-	DEL    = "del"
-	LEADER = "leader"
-	EXIT   = "exit"
-	TXN    = "txn"
-	ADD    = "add"
-	SUB    = "sub"
-	ENDTXN = "end"
+	GET      = "get"
+	SET      = "set"
+	DEL      = "del"
+	LEADER   = "leader"
+	EXIT     = "exit"
+	TXN      = "txn"
+	ADD      = "add"
+	SUB      = "sub"
+	ENDTXN   = "end"
 	TRANSFER = "xfer"
 
 	Prepare = "Prepare"
