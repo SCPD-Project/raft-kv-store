@@ -35,7 +35,7 @@ type Coordinator struct {
 	log    *log.Entry
 }
 
-// New initialises the new coordinator instance
+// NewCoordinator initialises the new coordinator instance
 func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSingle bool) *Coordinator {
 
 	if nodeID == "" {
@@ -114,4 +114,10 @@ func (c *Coordinator) Replicate(key, op string, gt *raftpb.GlobalTransaction) er
 	f := c.raft.Apply(b, common.RaftTimeout)
 
 	return f.Error()
+}
+
+// IsLeader return if coordinator is leader of cluster.
+func (c *Coordinator) IsLeader() bool {
+
+	return c.raft.State() == raft.Leader
 }
