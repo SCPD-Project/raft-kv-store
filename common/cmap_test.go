@@ -6,11 +6,13 @@ import (
 	"github.com/raft-kv-store/raftpb"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	log "github.com/sirupsen/logrus"
 )
 
 func TestCmap_TryLocks(t *testing.T) {
 	// TryLocks succeeds without intersected keys
-	m1 := NewCmap(0)
+
+	m1 := NewCmap(log.New(), 0)
 	m1.Set("a", int64(1))
 	m1.Set("b", int64(2))
 	op1 := []*raftpb.Command{
@@ -39,7 +41,7 @@ func TestCmap_TryLocks(t *testing.T) {
 	}
 
 	// TryLocks succeeds with intersected keys locked
-	m2 := NewCmap(0)
+	m2 := NewCmap(log.New(),0)
 	m2.Set("a", int64(1))
 	m2.Set("b", int64(2))
 
@@ -79,7 +81,7 @@ func TestCmap_TryLocks(t *testing.T) {
 	}
 
 	// TryLocks fails with intersected keys locked
-	m3 := NewCmap(0)
+	m3 := NewCmap(log.New(),0)
 	m3.Set("a", 1)
 	m3.Set("b", 2)
 	m3.Set("c", 6)
@@ -120,7 +122,7 @@ func TestCmap_TryLocks(t *testing.T) {
 	}
 
 	// TryLocks fails with global lock
-	m4 := NewCmap(0)
+	m4 := NewCmap(log.New(),0)
 	m4.Set("a", 1)
 	m4.Set("b", 2)
 	m4.Set("c", 6)
@@ -163,7 +165,7 @@ func TestCmap_TryLocks(t *testing.T) {
 
 
 	// TryLocks fails with condition
-	m5 := NewCmap(0)
+	m5 := NewCmap(log.New(),0)
 	m5.Set("a", int64(1))
 	m5.Set("b", int64(2))
 	m5.Set("c", int64(6))
@@ -189,7 +191,7 @@ func TestCmap_TryLocks(t *testing.T) {
 }
 
 func TestCmap_WriteWithLocks(t *testing.T) {
-	m1 := NewCmap(0)
+	m1 := NewCmap(log.New(),0)
 	op1 := []*raftpb.Command{
 		{Method: SET, Key: "a", Value: 3},
 		{Method: SET, Key: "b", Value: 4},
@@ -207,7 +209,7 @@ func TestCmap_WriteWithLocks(t *testing.T) {
 }
 
 func TestCmap_MGet(t *testing.T) {
-	m1 := NewCmap(0)
+	m1 := NewCmap(log.New(),0)
 	op1 := []*raftpb.Command{
 		{Method: SET, Key: "a", Value: 3},
 		{Method: SET, Key: "b", Value: 4},
@@ -227,7 +229,7 @@ func TestCmap_MGet(t *testing.T) {
 }
 
 func TestCmap_SET(t *testing.T) {
-	m1 := NewCmap(0)
+	m1 := NewCmap(log.New(),0)
 	m1.Set("a", 1)
 	m1.Set("a", 2)
 	for k, expected := range map[string]interface{}{"a": 2} {
