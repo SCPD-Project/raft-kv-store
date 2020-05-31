@@ -180,7 +180,7 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 	// c.log the prepared phase and replicate it
 	gt.Phase = common.Prepared
 	if err := c.Replicate(txid, common.SET, gt); err != nil {
-		c.log.Infof("[txid: %s] failed to set Prepared state: %s", txid, err)
+		c.log.Errorf("[txid: %s] failed to set Prepared state: %s", txid, err)
 		return nil, fmt.Errorf("unable to complete transaction: %s", err)
 	}
 
@@ -205,7 +205,7 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 		shardOps.Phase = common.Commit
 
 		if err := c.Replicate(txid, common.SET, gt); err != nil {
-			c.log.Infof("[txid: %s] failed to set commit state: %s", txid, err)
+			c.log.Errorf("[txid: %s] failed to set commit state: %s", txid, err)
 			return nil, fmt.Errorf("unable to complete transaction: %s", err)
 		}
 
