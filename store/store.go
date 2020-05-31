@@ -62,7 +62,7 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSin
 		ID:                nodeID,
 		RaftAddress:       raftAddress,
 		RaftDir:           raftDir,
-		kv:                common.NewCmap(LockContention),
+		kv:                common.NewCmap(logger, LockContention),
 		log:               l,
 		rpcAddress:        rpcAddress,
 		persistKvDbConn:   persistDbConn,

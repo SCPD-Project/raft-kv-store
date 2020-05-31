@@ -36,21 +36,26 @@ type Cmap struct {
 	Map     map[string]*Value
 	mu      trylock.TryLocker
 	timeout time.Duration
+	log     *log.Entry
 }
 
-func NewCmap(t time.Duration) *Cmap {
+func NewCmap(logger *log.Logger, t time.Duration) *Cmap {
+	l := logger.WithField("component", "cmap")
 	return &Cmap{
 		Map:     make(map[string]*Value),
 		mu:      trylock.New(),
 		timeout: t,
+		log:     l,
 	}
 }
 
-func NewCmapFromMap(m map[string]interface{}, t time.Duration) *Cmap {
+func NewCmapFromMap(logger *log.Logger, m map[string]interface{}, t time.Duration) *Cmap {
+	l := logger.WithField("component", "cmap")
 	res := &Cmap{
 		Map:     make(map[string]*Value),
 		mu:      trylock.New(),
 		timeout: t,
+		log:     l,
 	}
 	for k, v := range m {
 		res.Map[k] = NewValue(v)
@@ -87,7 +92,6 @@ func (c *Cmap) Get(k string) (val interface{}, ok bool, err error) {
 	return value.V, ok, nil
 }
 
-
 // MGet is multiple get
 // inexistence and error are put together
 func (c *Cmap) MGet(ops []*raftpb.Command) (map[string]interface{}, error) {
@@ -111,7 +115,6 @@ func (c *Cmap) MGet(ops []*raftpb.Command) (map[string]interface{}, error) {
 	}
 	return res, nil
 }
-
 
 func (c *Cmap) benchmarkSet(k string, v, v0 interface{}, t time.Duration) error {
 	if global := c.mu.TryLockTimeout(c.timeout); !global {
@@ -137,11 +140,11 @@ func (c *Cmap) benchmarkSet(k string, v, v0 interface{}, t time.Duration) error 
 }
 
 func (c *Cmap) Set(k string, v interface{}) error {
-	return c.benchmarkSet(k, v, nil,0)
+	return c.benchmarkSet(k, v, nil, 0)
 }
 
 func (c *Cmap) SetCond(k string, v, v0 interface{}) error {
-	return c.benchmarkSet(k, v, v0,0)
+	return c.benchmarkSet(k, v, v0, 0)
 }
 
 func (c *Cmap) Del(k string) error {
@@ -199,7 +202,7 @@ func (c *Cmap) TryLocks(ops []*raftpb.Command) error {
 	// Link tmpMap to c.Map if no failure
 	if len(tmpMap) > 0 && !revert {
 		for k, v := range tmpMap {
-			log.Printf("try lock for new key %s", k)
+			c.log.Infof("try lock for new key %s", k)
 			c.Map[k] = v
 		}
 	}
@@ -225,7 +228,7 @@ func (c *Cmap) WriteWithLocks(ops []*raftpb.Command) {
 		case SET:
 			val, ok := c.Map[op.Key]
 			if !ok {
-				log.Fatalf("%s does not exist", op.Key)
+				c.log.Fatalf("%s does not exist", op.Key)
 			}
 			val.V = op.Value
 			// unset temp flag for committed keys
@@ -234,7 +237,7 @@ func (c *Cmap) WriteWithLocks(ops []*raftpb.Command) {
 		case DEL:
 			delete(c.Map, op.Key)
 		default:
-			log.Fatalf("Unknown op: %s", op.Method)
+			c.log.Fatalf("Unknown op: %s", op.Method)
 		}
 	}
 }
@@ -249,7 +252,7 @@ func (c *Cmap) Write(ops []*raftpb.Command) {
 		case DEL:
 			delete(c.Map, op.Key)
 		default:
-			log.Fatalf("Unknown op: %s", op.Method)
+			c.log.Fatalf("Unknown op: %s", op.Method)
 		}
 	}
 }
@@ -306,22 +309,21 @@ type ConcurrentMap interface {
 	benchmarkSet(string, interface{}, interface{}, time.Duration) error
 }
 
-
-func (c* Cmap) Debug(log *log.Entry, s string, k ...string) {
+func (c *Cmap) Debug(log *log.Entry, s string, k ...string) {
 	if c.mu.TryLockTimeout(10) {
-		log.Infof("store NOT LOCKED in %s ", s)
+		c.log.Debugf("store NOT LOCKED in %s ", s)
 		c.mu.Unlock()
 		for _, key := range k {
 			if _, ok := c.Map[key]; ok {
 				if c.Map[key].mu.TryLockTimeout(10) {
-					log.Infof("store %s=%d NOT LOCKED in %s", key, c.Map["key"].V, s)
+					c.log.Debugf("store %s=%d NOT LOCKED in %s", key, c.Map["key"].V, s)
 					c.Map[key].mu.Unlock()
 				} else {
-					log.Infof("store %s=%d LOCKED in %s", key, c.Map["key"].V, s)
+					c.log.Debugf("store %s=%d LOCKED in %s", key, c.Map["key"].V, s)
 				}
 			}
 		}
 	} else {
-		log.Info("store LOCKED in PRE ")
+		c.log.Debugf("store LOCKED in PRE ")
 	}
 }

@@ -1,6 +1,7 @@
 package common
 
 import (
+	log "github.com/sirupsen/logrus"
 	"strconv"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ func GetSet(m ConcurrentMap, finished chan struct{}) (set func(key string, value
 }
 
 func BenchmarkCmapGetSetDifferent(b *testing.B) {
-	m := NewCmap(0)
+	m := NewCmap(log.New(), 0)
 	finished := make(chan struct{}, 2*b.N)
 	get, set := GetSet(m, finished)
 	m.Set("-1", "value")
@@ -53,7 +54,7 @@ func BenchmarkNaiveMapGetSetDifferent(b *testing.B) {
 }
 
 func BenchmarkCmapMultiInsertSame(b *testing.B) {
-	m := NewCmap(0)
+	m := NewCmap(log.New(), 0)
 	finished := make(chan struct{}, b.N)
 	_, set := GetSet(m, finished)
 	m.Set("key", "value")
@@ -81,7 +82,7 @@ func BenchmarkNaiveMapMultiInsertSame(b *testing.B) {
 }
 
 func BenchmarkCmapMultiGetSetBlock(b *testing.B) {
-	m := NewCmap(0)
+	m := NewCmap(log.New(), 0)
 	finished := make(chan struct{}, 2*b.N)
 	get, set := GetSet(m, finished)
 	for i := 0; i < b.N; i++ {
