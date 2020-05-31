@@ -97,7 +97,6 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 	if msg != "" {
 		s.log.Info(msg)
 	}
-	return
 }
 
 // TODO: No raft leader api exposed in coordinator
@@ -111,31 +110,30 @@ func (s *Service) handleKeyRequest(w http.ResponseWriter, r *http.Request) {
 
 // handleTransaction
 func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
-	// ...so we convert it to a string by passing it through
-	// a buffer first. A 'costly' but useful process.
+	var msg string
 	cmds := &raftpb.RaftCommand{}
 	if m, err := ioutil.ReadAll(r.Body); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		return
+		msg = fmt.Sprintf("failed to read %v", r.Body)
 	} else if err = proto.Unmarshal(m, cmds); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-	}
-	resultCmds, err := s.coordinator.Transaction(cmds)
-	if err != nil {
-		s.log.Error(err)
+		msg = fmt.Sprintf("failed to parse %v", r.Body)
+	} else if resultCmds, err := s.coordinator.Transaction(cmds); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	respBody, err := proto.Marshal(resultCmds)
-	if err != nil {
-		s.log.Error(err)
+		msg = fmt.Sprintf("Unable to txn: %s", err.Error())
+	} else if respBody, err := proto.Marshal(resultCmds); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		return
+		msg = fmt.Sprintf("Unable to marshal: %s", err.Error())
+	} else {
+		w.WriteHeader(http.StatusOK)
+		w.Write(respBody)
 	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(respBody)
+	if msg != "" {
+		s.log.Info(msg)
+		io.WriteString(w, msg)
+	}
 }
+
 
 // Addr returns the address on which the Service is listening
 func (s *Service) Addr() net.Addr {

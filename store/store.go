@@ -16,11 +16,12 @@ import (
 	"net/rpc"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 const (
 	SnapshotPersistFile = "persistedKeyValues.db"
-    LockContention = 0 // This can be change to test concurrentMap performance
+    LockContention = 1 * time.Microsecond // This can be change to test concurrentMap performance
 )
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.

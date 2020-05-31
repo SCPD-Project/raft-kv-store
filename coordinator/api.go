@@ -101,40 +101,57 @@ func (c *Coordinator) Delete(key string) error {
 
 }
 
+func isReadOnly(ops []*raftpb.Command) bool {
+	for _, op := range ops {
+		if op.Method != common.GET {
+			return false
+		}
+	}
+	return true
+}
+
 // Transaction atomically executes the transaction .
 func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand, error) {
 
 	c.log.Infof("Processing Transaction")
-
 	txid := xid.New().String()
-	gt, readOnly := c.newGlobalTransaction(txid, cmds)
+	gt := c.newGlobalTransaction(txid, cmds)
+	readOnly := isReadOnly(gt.Cmds.Commands)
 	numShards := len(gt.ShardToCommands)
 	resultCmds := &raftpb.RaftCommand{}
 
-	c.log.Infof("Starting prepare phase for txid: %s\n", txid)
+	c.log.Infof("Starting prepare phase for txid: [%s]", txid)
 	// Prepare Phase
-	// Send prepare messages to all the shards involved in
-	// transaction. This is a synchronous operation atm. It can
-	// be asynchronous
+	// Send prepare messages to all the shards involved in transaction.
+	// This is a synchronous operation atm. It can be asynchronous
+	// TODO: go routine SendMessageToShard
 	var prepareResponses int
+	var readOnlyErr error
+	if readOnly {
+		c.log.Infof("[txid %s] is read-only", txid)
+	}
 	for _, shardops := range gt.ShardToCommands {
-
-		if readOnly {
-			shardops.ReadOnly = true
-		}
-
-		cmds, success := c.SendMessageToShard(shardops)
-		if success {
+		shardops.ReadOnly = readOnly
+		cmds, err := c.SendMessageToShard(shardops)
+		if err == nil {
 			prepareResponses++
-			// append to the result
-			resultCmds.Commands = append(resultCmds.Commands, cmds...)
+		} else {
+			c.log.Infof("[txid %s] failed at %v with %s", txid, shardops, err.Error())
 		}
-
+		if readOnly{
+			resultCmds.Commands = append(resultCmds.Commands, cmds...)
+			readOnlyErr = err
+		}
+	}
+	if readOnly {
+		c.log.Infof("[txid: %s] read-only transaction, returning after prepare phase", txid)
+		return resultCmds, readOnlyErr
 	}
 
-	c.log.Infof("[txid %s] prepared sent\n", txid)
 
-	if prepareResponses != numShards {
+	c.log.Infof("[txid %s] Prepared sent", txid)
+
+	if prepareResponses != numShards && !readOnly{
 		// send abort and report error.
 		// abort will help release the locks
 		// on the shards.
@@ -143,24 +160,24 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 		// replicate via raft
 		c.txMap[txid] = gt
 
+		var err error
 		for _, shardops := range gt.ShardToCommands {
 			shardops.Phase = common.Abort
 			// best effort
-			c.SendMessageToShard(shardops)
-
+			_, err = c.SendMessageToShard(shardops)
+			if err != nil {
+				c.log.Infof("[txid %s] failed at %v with %s", txid, shardops, err.Error())
+			}
 		}
-		return nil, fmt.Errorf("transaction unsuccesfull, try again")
+		return nil, err
 	}
 
 	c.log.Infof("[txid: %s] Prepared recieved: %d Prepared Expected: %d", txid, prepareResponses, numShards)
+
+
 	// c.log the prepared phase and replicate it
 	gt.Phase = common.Prepared
 	c.txMap[txid] = gt
-
-	if readOnly {
-		c.log.Infof("[txid: %s] read-only transaction, returning after prepare phase", txid)
-		return resultCmds, nil
-	}
 	// TODO(imp):if the above replication fails via raft,
 	// this usually means majority of nodes in the coordinator
 	// cluster are faulty (partition or down). In that case,
@@ -172,8 +189,7 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 		// Replicate via Raft
 		c.txMap[txid].Phase = common.Commit
 		shardOps.Phase = common.Commit
-		_, success := c.SendMessageToShard(shardOps)
-		if success {
+		if _, err := c.SendMessageToShard(shardOps); err == nil {
 			commitResponses++
 		}
 	}
@@ -194,7 +210,7 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 
 // newGlobalTransaction creates a new transaction object and returns if a transaction is
 // read-only or not.
-func (c *Coordinator) newGlobalTransaction(txid string, cmds *raftpb.RaftCommand) (*raftpb.GlobalTransaction, bool) {
+func (c *Coordinator) newGlobalTransaction(txid string, cmds *raftpb.RaftCommand) *raftpb.GlobalTransaction {
 
 	gt := &raftpb.GlobalTransaction{
 		Txid:  txid,
@@ -202,23 +218,18 @@ func (c *Coordinator) newGlobalTransaction(txid string, cmds *raftpb.RaftCommand
 		Phase: common.Prepare,
 	}
 
-	var readCommands int
 	shardToCmds := make(map[int64]*raftpb.ShardOps)
 
 	for _, cmd := range cmds.Commands {
 		shardID := c.GetShardID(cmd.Key)
-		if cmd.Method == common.GET {
-			readCommands++
-		}
-
 		if _, ok := shardToCmds[shardID]; !ok {
-
 			shardToCmds[shardID] = &raftpb.ShardOps{
 				Txid:      txid,
 				MasterKey: cmd.Key,
 				Phase:     common.Prepare,
 				Cmds: &raftpb.RaftCommand{
 					Commands: []*raftpb.Command{},
+					IsTxn: cmds.IsTxn,
 				},
 			}
 		}
@@ -227,7 +238,7 @@ func (c *Coordinator) newGlobalTransaction(txid string, cmds *raftpb.RaftCommand
 	}
 	gt.ShardToCommands = shardToCmds
 
-	return gt, readCommands == len(cmds.Commands)
+	return gt
 }
 
 // Join joins a node, identified by nodeID and located at addr, to this store.

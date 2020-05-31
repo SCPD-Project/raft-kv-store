@@ -33,7 +33,6 @@ type Cohort struct {
 }
 
 func startCohort(store *Store, listenAddress string) {
-
 	c := &Cohort{
 		store:  store,
 		opsMap: make(map[string]*raftpb.ShardOps),
@@ -116,52 +115,35 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *raftpb.
 
 // ProcessTransactionMessages processes prepare/commit messages from the coordinator.
 func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.RPCResponse) error {
-
 	c.store.log.Infof("Processing Transaction message :%v :%v", ops.Phase, ops.Cmds)
 	switch ops.Phase {
 	case common.Prepare:
-		resultCmds, result := c.store.CheckDataConflicts(ops)
-		*reply = raftpb.RPCResponse{
-			Status:   0,
-			Phase:    result,
-			Commands: resultCmds,
+		//Note that the transaction is read-only, iff it is read-only across all shards.
+		if ops.ReadOnly {
+			return c.ProcessReadOnly(ops, reply)
 		}
 
-		// No need for a lock for readonly. Any inconsistency
-		// gets resolved by conditional set. Note that the
-		// transaction is read-only, only if it is read-only across
-		// all shards.
-		if !ops.ReadOnly {
-			c.store.transactionInProgress = true
-		}
+		// This should be replicated via raft with raft Apply, once setup
+		// if raft fails, send NotPrepared. log 2 pc message
+		c.opsMap[ops.Txid] = ops
 
-
-
-
-
-
-		// If it fails to get some of the lock, prepare should return "No"
 		if err := c.store.kv.TryLocks(ops.Cmds.Commands); err != nil {
+			// If it fails to get some of the lock, prepare should return "No"
 			*reply = raftpb.RPCResponse{
-				// TODO: use different status codes to give appropriate
-				// error to coordinator. For now, -1 is failure
 				Status: -1,
 				Phase:  common.NotPrepared,
 			}
 			// no need to update cohort state machine, it is equivalent to a no transaction.
 			return err
 		}
-
-		// below should be raft call, once raft is setup.
-		ops.Phase = common.Prepared
-		// This should be replicated via raft with raft Apply, once setup
-		// if raft fails, send NotPrepared. log 2 pc message
-		c.opsMap[ops.Txid] = ops
-
 		*reply = raftpb.RPCResponse{
 			Status: 0,
 			Phase:  common.Prepared,
 		}
+		// below should be
+		//raft call, once raft is setup.
+		ops.Phase = common.Prepared
+
 
 	case common.Commit:
 		if c.opsMap[ops.Txid].Phase != common.Prepared {
@@ -177,8 +159,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 		ops.Phase = common.Committed
 		c.opsMap[ops.Txid] = ops
 
-
-		// Apply to fsm
+		//Apply to fsm
 		b, err := proto.Marshal(ops.Cmds)
 		if err != nil {
 			return err
@@ -195,6 +176,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 		}
 
 	case common.Abort:
+
 		// log 2 pc abort message, replicate via raft
 		// this should be set operation on raft
 		c.opsMap[ops.Txid].Phase = common.Abort
@@ -208,52 +190,31 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 	return nil
 }
 
+func (c *Cohort) ProcessReadOnly(ops *raftpb.ShardOps, reply *raftpb.RPCResponse) error {
+	m, err := c.store.kv.MGet(ops.Cmds.Commands)
+	if err != nil {
+		*reply = raftpb.RPCResponse{
+			Status: -1,
+			Phase:  common.NotPrepared,
+		}
+		return err
+	}
+	var res []*raftpb.Command
+	for k, v := range m {
+		res = append(res, &raftpb.Command{Key: k, Value: v.(int64)})
+	}
+	*reply = raftpb.RPCResponse{
+		Status:   0,
+		Phase:    common.Prepared,
+		Commands: res,
+	}
+	return nil
+}
+
+
 // ProcessJoin processes join message.
 // TODO: Use this to join cohort raft as well.
 func (c *Cohort) ProcessJoin(joinMsg *raftpb.JoinMsg, reply *raftpb.RPCResponse) error {
-
 	return c.store.Join(joinMsg.ID, joinMsg.RaftAddress)
 }
 
-// CheckDataConflicts  checks if the requests have any data conflicts for set
-// operations in a transaction. For get operations, it returns the result. If no
-// conflicts, it returns success and declares that cohort is prepared.
-func (s *Store) CheckDataConflicts(ops *raftpb.ShardOps) ([]*raftpb.Command, string) {
-
-	resultCmds := []*raftpb.Command{}
-
-	if ops.Cmds == nil {
-		return nil, common.NotPrepared
-	}
-
-	for _, cmd := range ops.Cmds.Commands {
-
-		switch cmd.Method {
-		case common.GET:
-			if val, ok := s.kv[cmd.Key]; ok {
-				resultCmds = append(resultCmds, &raftpb.Command{
-					Method: cmd.Method,
-					Key:    cmd.Key,
-					Value:  val,
-				})
-			} else {
-				// key does not exist
-				return nil, common.NotPrepared
-			}
-
-		case common.SET:
-			if val, ok := s.kv[cmd.Key]; ok {
-				// check conditions
-				c := cmd.GetCond()
-				if c != nil && val != c.Value {
-					// conflict
-					return nil, common.NotPrepared
-				}
-			}
-			resultCmds = append(resultCmds, cmd)
-
-		}
-	}
-
-	return resultCmds, common.Prepared
-}

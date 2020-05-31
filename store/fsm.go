@@ -25,7 +25,9 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	if err := proto.Unmarshal(l.Data, &raftCommand); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal command: %s", err.Error()))
 	}
-	if len(raftCommand.Commands) == 1 {
+	f.log.Infof("Apply %v", raftCommand)
+	// txn set is locked already in prepare
+	if !raftCommand.IsTxn {
 		command := raftCommand.Commands[0]
 		switch command.Method {
 		case common.SET:
@@ -74,11 +76,12 @@ func (f *fsm) Restore(_ io.ReadCloser) error {
 }
 
 func (f *fsm) applySet(key string, value int64) interface{} {
-	if err := f.kv.Set(key, value); err != nil {
+	if err := f.kv.Set(key, value); err == nil {
 		return &FSMApplyResponse{
 			reply: raftpb.RPCResponse{Status: 0},
 		}
 	} else {
+		f.log.Infof(err.Error())
 		return &FSMApplyResponse{
 			err: err,
 			reply: raftpb.RPCResponse{Status: -1},
@@ -88,7 +91,7 @@ func (f *fsm) applySet(key string, value int64) interface{} {
 }
 
 func (f *fsm) applySetCond(key string, value, value0 int64) interface{} {
-	if err := f.kv.SetCond(key, value, value0); err != nil {
+	if err := f.kv.SetCond(key, value, value0); err == nil {
 		return &FSMApplyResponse{
 			reply: raftpb.RPCResponse{Status: 0},
 		}
@@ -117,7 +120,9 @@ func (f *fsm) applyDelete(key string) interface{} {
 
 // return transaction result
 func (f *fsm) applyTransaction(ops []*raftpb.Command) interface{} {
-	f.kv.WriteWithLocks(ops)
+	// WriteWithLocks will fail in recovery
+	// Write is safe as long as it's only used in txn
+	f.kv.Write(ops)
 	return nil
 }
 

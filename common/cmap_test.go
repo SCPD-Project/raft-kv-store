@@ -187,3 +187,52 @@ func TestCmap_TryLocks(t *testing.T) {
 		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
 	}
 }
+
+func TestCmap_WriteWithLocks(t *testing.T) {
+	m1 := NewCmap(0)
+	op1 := []*raftpb.Command{
+		{Method: SET, Key: "a", Value: 3},
+		{Method: SET, Key: "b", Value: 4},
+	}
+	m1.WriteWithLocks(op1)
+	assert.True(t, m1.mu.TryLockTimeout(0), "Cmap should not be globally locked")
+	m1.mu.Unlock()
+	for k, expected := range map[string]interface{}{"a": int64(3), "b": int64(4)} {
+		actual, ok, err := m1.Get(k)
+		assert.Truef(t, err == nil, "Not error is expected for key %s", k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
+	}
+}
+
+func TestCmap_MGet(t *testing.T) {
+	m1 := NewCmap(0)
+	op1 := []*raftpb.Command{
+		{Method: SET, Key: "a", Value: 3},
+		{Method: SET, Key: "b", Value: 4},
+	}
+	m1.TryLocks(op1)
+	m1.WriteWithLocks(op1)
+	m1.MGet([]*raftpb.Command{
+		{Method: GET, Key: "a"},
+		{Method: GET, Key: "b"},
+	})
+	for k, expected := range map[string]interface{}{"a": int64(3), "b": int64(4)} {
+		actual, ok, err := m1.Get(k)
+		assert.Truef(t, err == nil, "Not error is expected for key %s", k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
+	}
+}
+
+func TestCmap_SET(t *testing.T) {
+	m1 := NewCmap(0)
+	m1.Set("a", 1)
+	m1.Set("a", 2)
+	for k, expected := range map[string]interface{}{"a": 2} {
+		actual, ok, err := m1.Get(k)
+		assert.Truef(t, err == nil, "Not error is expected for key %s", k)
+		assert.Truef(t, ok, "Value should exist for key %s", k)
+		assert.Equalf(t, expected, actual, "Expected %d, but got %d for key %s", expected, actual, k)
+	}
+}
