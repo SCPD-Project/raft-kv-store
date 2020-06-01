@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"path"
 	"runtime"
+	"strconv"
 	"strings"
 
 	nested "github.com/antonfisher/nested-logrus-formatter"
@@ -18,33 +19,32 @@ import (
 )
 
 const (
-	DefaultListenAddress     = "localhost:11000"
-	DefaultRaftAddress       = "localhost:12000"
-	DefaultCohortRaftAddress = "localhost:25000"
+	DefaultListenAddress = "localhost:11000"
+	DefaultRaftAddress   = "localhost:12000"
 
 	DefaultCoordinatorListenAddress = "localhost:21000"
 	DefaultCoordinatorRaftAddress   = "localhost:22000"
+
+	MagicDiff = 20000
 )
 
 // Command line parameters
 var (
-	listenAddress     string
-	raftAddress       string
-	cohortRaftAddress string
-	rpcAddress        string
-	joinHTTPAddress   string
-	cohortJoinAddress string
-	raftDir           string
-	nodeID            string
-	bucketName        string
-	isCoordinator     bool
+	listenAddress   string
+	raftAddress     string
+	rpcAddress      string
+	joinHTTPAddress string
+	raftDir         string
+	nodeID          string
+	bucketName      string
+	isCoordinator   bool
 )
 
 func init() {
+
 	flag.StringVarP(&listenAddress, "listen", "l", DefaultListenAddress, "Set the server listen address")
 
 	flag.StringVarP(&raftAddress, "raft", "r", DefaultRaftAddress, "Set the RAFT binding address")
-	flag.StringVarP(&cohortRaftAddress, "cohortRaft", "f", DefaultCohortRaftAddress, "Set the RAFT binding address")
 	flag.StringVarP(&joinHTTPAddress, "join", "j", "", "Set joining HTTP address, if any")
 	flag.StringVarP(&nodeID, "id", "i", "", "Node ID, randomly generated if not set")
 	flag.StringVarP(&raftDir, "dir", "d", "", "Raft directory, ./$(nodeID) if not set")
@@ -83,8 +83,14 @@ func main() {
 		h := httpd.NewService(logger, listenAddress, c)
 		h.Start(joinHTTPAddress)
 	} else {
-		// need to start rpc server
-		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", listenAddress, bucketName, cohortRaftAddress, joinHTTPAddress)
+
+		// derive raftaddress for cohort
+		port, err := strconv.ParseInt(raftAddress, 10, 32)
+		if err != nil {
+			log.Fatalf("Invalid raft port for store: %s", err)
+		}
+
+		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", listenAddress, bucketName, strconv.Itoa(int(port+MagicDiff)), joinHTTPAddress)
 		kv.Start(joinHTTPAddress, nodeID)
 
 	}

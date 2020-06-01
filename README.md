@@ -37,16 +37,16 @@ TODO: Remove this once we have the cluster
 ```
 ## Start KV Shard-1
 ```
-bin/kv -i node-0 -l :11000 -r :12000 -f :19000
-bin/kv -i node-1 -l :11001 -r :12001 -f :19001 -j :11000 
-bin/kv -i node-2 -l :11002 -r :12002 -f :19002 -j :11000
+bin/kv -i node-0 -l :11000 -r :12000 
+bin/kv -i node-1 -l :11001 -r :12001 -j :11000 
+bin/kv -i node-2 -l :11002 -r :12002 -j :11000
 ```
 
 ## Start KV Shard-2
 ```
-bin/kv -i node-3 -l :15000 -r :16000 -f :18000
-bin/kv -i node-4 -l :15001 -r :16001 -f :18001 -j :15000 
-bin/kv -i node-5 -l :15002 -r :16002 -f :18002 -j :15000
+bin/kv -i node-3 -l :15000 -r :16000 
+bin/kv -i node-4 -l :15001 -r :16001 -j :15000 
+bin/kv -i node-5 -l :15002 -r :16002 -j :15000
 ```
 
 ## Start Coordinator

@@ -25,7 +25,6 @@ type Cohort struct {
 
 	store *Store
 
-	// TODO: raft instance to replicate fsm of cohort
 	raft *raft.Raft
 
 	// replicate cohort state
@@ -265,7 +264,6 @@ func (c *Cohort) join(nodeID, addr string) error {
 }
 
 // ProcessJoin processes join message.
-// TODO: Use this to join cohort raft as well.
 func (c *Cohort) ProcessJoin(joinMsg *raftpb.JoinMsg, reply *raftpb.RPCResponse) error {
 
 	if joinMsg.TYPE == StoreInstance {
