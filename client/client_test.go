@@ -1,8 +1,6 @@
 package client
 
 import (
-	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -133,7 +131,7 @@ func TestClient(t *testing.T) {
 
 }
 
-
+/*
 func TestMultiClients(t *testing.T) {
 	var clients []*raftKVClient
 	for i := 0; i < 10; i++ {
@@ -159,3 +157,4 @@ func TestMultiClients(t *testing.T) {
 	wg.Wait()
 
 }
+ */
