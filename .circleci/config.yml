@@ -13,6 +13,7 @@ jobs:
     working_directory: /go/src/github.com/SCPD-Project/raft-kv-store
     steps:
       - checkout
+      - setup_remote_docker
       - restore_cache: # restores saved cache if no changes are detected since last run
           keys:
             - go-mod-v1-{{.Branch }}

@@ -7,7 +7,7 @@ require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/fatih/color v1.9.0
 	github.com/gogo/protobuf v1.3.1
-	github.com/golang/protobuf v1.3.3
+	github.com/golang/protobuf v1.4.1
 	github.com/google/go-cmp v0.4.1
 	github.com/hashicorp/raft v1.1.2
 	github.com/hashicorp/raft-boltdb v0.0.0-20191021154308-4207f1bf0617
@@ -18,4 +18,5 @@ require (
 	github.com/stretchr/testify v1.3.0
 	github.com/subchen/go-trylock/v2 v2.0.0
 	golang.org/x/sys v0.0.0-20200223170610-d5e6a3e2c0ae // indirect
+	google.golang.org/protobuf v1.24.0
 )
