@@ -222,11 +222,11 @@ func (c *Cmap) TryLocks(ops []*raftpb.Command, txid string) error {
 			return errors.New("set condition fails")
 		}
 		return errors.New("map is locked locally")
-	} else {
-		for _, value := range locked {
-			value.txid = txid
-			c.log.Infof("LOCKED for key %s in %s", value.k, value.txid)
-		}
+	}
+	//Assign txid if success
+	for _, value := range locked {
+		value.txid = txid
+		c.log.Infof("LOCKED for key %s in %s", value.k, value.txid)
 	}
 	return nil
 }
