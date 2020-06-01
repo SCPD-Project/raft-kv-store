@@ -131,30 +131,28 @@ func TestClient(t *testing.T) {
 
 }
 
-/*
-func TestMultiClients(t *testing.T) {
-	var clients []*raftKVClient
-	for i := 0; i < 10; i++ {
-		clients = append(clients, NewRaftKVClient(":17000"))
-		clients[i].txnCmds = &raftpb.RaftCommand{
-			Commands: []*raftpb.Command{
-				{Method: common.DEL, Key: "test3", Value: int64(i)},
-				{Method: common.DEL, Key: "test4", Value: int64(-i)},
-			},
-			IsTxn: true,
-		}
-	}
+//
+//func TestMultiClients(t *testing.T) {
+//	var clients []*raftKVClient
+//	for i := 0; i < 15; i++ {
+//		clients = append(clients, NewRaftKVClient(":17000"))
+//		clients[i].txnCmds = &raftpb.RaftCommand{
+//			Commands: []*raftpb.Command{
+//				{Method: common.SET, Key: "test3", Value: int64(i)},
+//				{Method: common.SET, Key: "test4", Value: int64(-i)},
+//			},
+//			IsTxn: true,
+//		}
+//	}
+//	var wg sync.WaitGroup
+//	for _, c := range clients {
+//		wg.Add(1)
+//		go func(c *raftKVClient) {
+//			defer wg.Done()
+//			res, err := c.Transaction()
+//			fmt.Println(res, err, c.txnCmds)
+//		}(c)
+//	}
+//	wg.Wait()
+//}
 
-	var wg sync.WaitGroup
-	for _, c := range clients {
-		wg.Add(1)
-		go func(c *raftKVClient) {
-			defer wg.Done()
-			res, err := c.Transaction()
-			fmt.Println(res, err, c.txnCmds)
-		}(c)
-	}
-	wg.Wait()
-
-}
- */

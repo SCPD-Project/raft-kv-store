@@ -11,8 +11,6 @@ import (
 	"github.com/subchen/go-trylock/v2"
 )
 
-const LongTimeOut = 100 * time.Microsecond
-
 type Value struct {
 	k    string // For debug purpose
 	V    interface{}
@@ -278,12 +276,13 @@ func (c *Cmap) AbortWithLocks(ops []*raftpb.Command, txid string) {
 		}
 		if val.txid != txid {
 			c.log.Infof("txid CHANGE to %s != %s when trying to abort %v", val.txid, txid, ops)
+			continue
 		}
 		if val.temp {
 			// delete key is temp when aborting
 			delete(c.Map, op.Key)
 		}
-		val.mu.TryLockTimeout(LongTimeOut)
+		//val.mu.TryLockTimeout(LongTimeOut)
 		val.mu.Unlock()
 		c.log.Infof("txid %s UNLOCK when trying to abort %v", txid, ops)
 	}
