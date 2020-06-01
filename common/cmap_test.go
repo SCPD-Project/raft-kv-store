@@ -19,7 +19,7 @@ func TestCmap_TryLocks(t *testing.T) {
 		{Method: SET, Key: "c", Value: 3},
 		{Method: DEL, Key: "d"},
 	}
-	m1.TryLocks(op1)
+	m1.TryLocks(op1, "")
 
 	assert.True(t, m1.mu.TryLockTimeout(0), "Cmap should not be globally locked")
 	m1.mu.Unlock()
@@ -50,7 +50,7 @@ func TestCmap_TryLocks(t *testing.T) {
 		{Method: DEL, Key: "c"},
 		{Method: SET, Key: "d", Value: 4},
 	}
-	err2 := m2.TryLocks(op2)
+	err2 := m2.TryLocks(op2, "")
 	assert.True(t, err2 == nil)
 	assert.True(t, m2.mu.TryLockTimeout(0), "Cmap should not be globally locked")
 	m2.mu.Unlock()
@@ -95,7 +95,7 @@ func TestCmap_TryLocks(t *testing.T) {
 		{Method: SET, Key: "e", Value: 7},
 		{Method: SET, Key: "f", Value: 8},
 	}
-	m3.TryLocks(op3)
+	m3.TryLocks(op3, "")
 
 	assert.True(t, m3.mu.TryLockTimeout(0), "Cmap should not be globally locked")
 	m3.mu.Unlock()
@@ -137,7 +137,7 @@ func TestCmap_TryLocks(t *testing.T) {
 		{Method: SET, Key: "e", Value: 7},
 		{Method: SET, Key: "f", Value: 8},
 	}
-	m4.TryLocks(op4)
+	m4.TryLocks(op4, "")
 
 	assert.True(t, !m4.mu.TryLockTimeout(0), "Cmap should be globally locked")
 	m4.mu.Unlock()
@@ -173,7 +173,7 @@ func TestCmap_TryLocks(t *testing.T) {
 		{Method: SET, Key: "a", Value: 2, Cond: &raftpb.Cond{Key: "a", Value: 2}},
 		{Method: SET, Key: "b", Value: 1, Cond: &raftpb.Cond{Key: "b", Value: 1}},
 	}
-	err5 := m5.TryLocks(op5)
+	err5 := m5.TryLocks(op5, "")
 
 	assert.True(t, m5.mu.TryLockTimeout(0), "Cmap should not be globally locked")
 	m5.mu.Unlock()
@@ -195,7 +195,7 @@ func TestCmap_WriteWithLocks(t *testing.T) {
 		{Method: SET, Key: "a", Value: 3},
 		{Method: SET, Key: "b", Value: 4},
 	}
-	m1.TryLocks(op1)
+	m1.TryLocks(op1, "")
 	m1.WriteWithLocks(op1)
 	assert.True(t, m1.mu.TryLockTimeout(0), "Cmap should not be globally locked")
 	m1.mu.Unlock()
@@ -213,7 +213,7 @@ func TestCmap_MGet(t *testing.T) {
 		{Method: SET, Key: "a", Value: 3},
 		{Method: SET, Key: "b", Value: 4},
 	}
-	m1.TryLocks(op1)
+	m1.TryLocks(op1, "")
 	m1.WriteWithLocks(op1)
 	m1.MGet([]*raftpb.Command{
 		{Method: GET, Key: "a"},

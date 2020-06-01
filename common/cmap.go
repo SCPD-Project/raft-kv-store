@@ -12,20 +12,24 @@ import (
 )
 
 type Value struct {
+	k string
 	V    interface{}
 	mu   trylock.TryLocker
 	temp bool
+	txid string
 }
 
-func NewValue(v interface{}) *Value {
+func NewValue(k string, v interface{}) *Value {
 	return &Value{
+		k : k,
 		V:  v,
 		mu: trylock.New(),
 	}
 }
 
-func TempNewValue(v interface{}) *Value {
+func TempNewValue(k string, v interface{}) *Value {
 	return &Value{
+		k: k,
 		V:    v,
 		mu:   trylock.New(),
 		temp: true,
@@ -58,7 +62,7 @@ func NewCmapFromMap(logger *log.Logger, m map[string]interface{}, t time.Duratio
 		log:     l,
 	}
 	for k, v := range m {
-		res.Map[k] = NewValue(v)
+		res.Map[k] = NewValue(k, v)
 	}
 	return res
 }
@@ -122,7 +126,7 @@ func (c *Cmap) benchmarkSet(k string, v, v0 interface{}, t time.Duration) error 
 	}
 	value, ok := c.Map[k]
 	if !ok {
-		c.Map[k] = NewValue(v)
+		c.Map[k] = NewValue(k, v)
 		c.mu.Unlock() // unlock globally asap
 		return nil
 	} else if local := value.mu.TryLockTimeout(c.timeout); !local {
@@ -164,7 +168,7 @@ func (c *Cmap) Del(k string) error {
 	return nil
 }
 
-func (c *Cmap) TryLocks(ops []*raftpb.Command) error {
+func (c *Cmap) TryLocks(ops []*raftpb.Command, txid string) error {
 	if len(ops) == 0 {
 		return errors.New("no key given")
 	}
@@ -182,7 +186,7 @@ func (c *Cmap) TryLocks(ops []*raftpb.Command) error {
 		if !ok {
 			// Handle new values
 			// Put temp flag to delete if abort
-			value = TempNewValue(nil)
+			value = TempNewValue(k,nil)
 			tmpMap[k] = value
 		}
 		// trylock on each value including new init
@@ -216,6 +220,11 @@ func (c *Cmap) TryLocks(ops []*raftpb.Command) error {
 			return errors.New("set condition fails")
 		}
 		return errors.New("map is locked locally")
+	} else {
+		for _, value := range locked {
+			value.txid = txid
+			c.log.Infof( "LOCKED for key %s in %s", value.k, value.txid)
+		}
 	}
 	return nil
 }
@@ -248,7 +257,7 @@ func (c *Cmap) Write(ops []*raftpb.Command) {
 	for _, op := range ops {
 		switch op.Method {
 		case SET:
-			c.Map[op.Key] = NewValue(op.Value)
+			c.Map[op.Key] = NewValue(op.Key, op.Value)
 		case DEL:
 			delete(c.Map, op.Key)
 		default:
@@ -257,17 +266,24 @@ func (c *Cmap) Write(ops []*raftpb.Command) {
 	}
 }
 
-func (c *Cmap) AbortWithLocks(ops []*raftpb.Command) {
+func (c *Cmap) AbortWithLocks(ops []*raftpb.Command, txid string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for _, op := range ops {
-		val := c.Map[op.Key]
+		val, ok := c.Map[op.Key]
+		if !ok {
+			continue
+		}
+		if val.txid != txid {
+			c.log.Infof("txid CHANGE to %s != %s when trying to abort %v", val.txid, txid, ops)
+		}
 		if val.temp {
 			// delete key is temp when aborting
 			delete(c.Map, op.Key)
-		} else {
-			val.mu.Unlock()
 		}
+		val.mu.TryLockTimeout(c.timeout * 100)
+		val.mu.Unlock()
+		c.log.Infof("txid %s UNLOCK when trying to abort %v", txid, ops)
 	}
 }
 

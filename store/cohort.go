@@ -115,7 +115,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 		// if raft fails, send NotPrepared. log 2 pc message
 		c.opsMap[ops.Txid] = ops
 
-		if err := c.store.kv.TryLocks(ops.Cmds.Commands); err != nil {
+		if err := c.store.kv.TryLocks(ops.Cmds.Commands, ops.Txid); err != nil {
 			// If it fails to get some of the lock, prepare should return "No"
 			// no need to update cohort state machine, it is equivalent to a no transaction.
 			return err
@@ -160,7 +160,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 		// log 2 pc abort message, replicate via raft
 		// this should be set operation on raft
 		c.opsMap[ops.Txid].Phase = common.Abort
-		c.store.kv.AbortWithLocks(ops.Cmds.Commands)
+		c.store.kv.AbortWithLocks(ops.Cmds.Commands, ops.Txid)
 		*reply = raftpb.RPCResponse{
 			Status: 0,
 			Phase:  common.Aborted,
