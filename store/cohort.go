@@ -63,7 +63,6 @@ func startCohort(store *Store, listenAddress string, nodeID, raftAddress, raftDi
 
 }
 
-// Start ...
 func (c *Cohort) start(joinHTTPAddress, id string) {
 
 	// no op if you are leader

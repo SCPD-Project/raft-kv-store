@@ -46,7 +46,6 @@ func init() {
 	flag.StringVarP(&raftAddress, "raft", "r", DefaultRaftAddress, "Set the RAFT binding address")
 	flag.StringVarP(&cohortRaftAddress, "cohortRaft", "f", DefaultCohortRaftAddress, "Set the RAFT binding address")
 	flag.StringVarP(&joinHTTPAddress, "join", "j", "", "Set joining HTTP address, if any")
-	flag.StringVarP(&cohortJoinAddress, "cohortJoin", "p", "", "Set joining HTTP address for cohort raft instance, if any")
 	flag.StringVarP(&nodeID, "id", "i", "", "Node ID, randomly generated if not set")
 	flag.StringVarP(&raftDir, "dir", "d", "", "Raft directory, ./$(nodeID) if not set")
 	flag.IntVarP(&common.SnapshotInterval, "snapshotinterval", "", 30,
@@ -85,7 +84,7 @@ func main() {
 		h.Start(joinHTTPAddress)
 	} else {
 		// need to start rpc server
-		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", listenAddress, bucketName, cohortRaftAddress, cohortJoinAddress)
+		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", listenAddress, bucketName, cohortRaftAddress, joinHTTPAddress)
 		kv.Start(joinHTTPAddress, nodeID)
 
 	}

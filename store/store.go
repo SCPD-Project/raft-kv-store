@@ -82,7 +82,7 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSin
 		l.Fatalf("Unable to setup raft instance for kv store:%s", err)
 	}
 	s.raft = ra
-	go startCohort(s, rpcAddress, "c-"+s.ID, cohortRaftAddress, "c-"+s.RaftDir, enableSingle, cohortJoinAddress)
+	go startCohort(s, rpcAddress, "c-"+s.ID, cohortRaftAddress, "cohort"+s.RaftDir, enableSingle, cohortJoinAddress)
 	return s
 }
 
