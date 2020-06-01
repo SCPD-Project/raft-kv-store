@@ -23,6 +23,18 @@ make proto
 make build
 ```
 
+## Start the container
+```
+docker run --rm --name kv -it supriyapremkumar/kv:v0.1 sh
+
+Run all the following container in by opening up as many shells as needed
+docker exec -it kv sh
+
+In order to clean up all the container run
+docker rm -fv $(docker ps -aq)
+
+TODO: Remove this once we have the cluster
+```
 ## Start KV Shard-1
 ```
 bin/kv -i node-0 -l :11000 -r :12000
