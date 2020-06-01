@@ -85,12 +85,13 @@ func main() {
 	} else {
 
 		// derive raftaddress for cohort
-		port, err := strconv.ParseInt(raftAddress, 10, 32)
+		ipPort := strings.Split(raftAddress, ":")
+		port, err := strconv.ParseInt(ipPort[1], 10, 32)
 		if err != nil {
 			log.Fatalf("Invalid raft port for store: %s", err)
 		}
-
-		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", listenAddress, bucketName, strconv.Itoa(int(port+MagicDiff)), joinHTTPAddress)
+		cohortRaftAddress := ipPort[0] + ":" + strconv.Itoa(int(port+MagicDiff))
+		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", listenAddress, bucketName, cohortRaftAddress, joinHTTPAddress)
 		kv.Start(joinHTTPAddress, nodeID)
 
 	}
