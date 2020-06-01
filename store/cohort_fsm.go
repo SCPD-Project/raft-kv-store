@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -23,7 +24,7 @@ func (f *cohortfsm) Apply(l *raft.Log) interface{} {
 	}
 
 	if len(raftCommand.Commands) > 1 {
-		return fmt.Errorf("invalid command for cohort fsm")
+		return errors.New("invalid command for cohort fsm")
 	}
 
 	command := raftCommand.Commands[0]
