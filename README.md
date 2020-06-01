@@ -39,7 +39,7 @@ TODO: Remove this once we have the cluster
 ```
 bin/kv -i node-0 -l :11000 -r :12000 -f :19000
 bin/kv -i node-1 -l :11001 -r :12001 -f :19001 -j :11000 
-bin/kv -i node-2 -l :11002 -r :12002 -j :19002 -j :11000
+bin/kv -i node-2 -l :11002 -r :12002 -f :19002 -j :11000
 ```
 
 ## Start KV Shard-2
