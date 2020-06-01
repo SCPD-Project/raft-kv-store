@@ -22,7 +22,13 @@ import (
 
 const (
 	SnapshotPersistFile = "persistedKeyValues.db"
-    LockContention = 1 * time.Microsecond // This can be change to test concurrentMap performance
+	LockContention      = 1 * time.Microsecond // This can be change to test concurrentMap performance
+)
+
+const (
+	// StoreInstance is used to identify the type of raft instance
+	StoreInstance  = "Store"
+	CohortInstance = "Cohort"
 )
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.
@@ -43,7 +49,9 @@ type Store struct {
 }
 
 // NewStore returns a new Store.
-func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSingle bool, rpcAddress string, bucketName string) *Store {
+func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSingle bool,
+	rpcAddress, bucketName, cohortRaftAddress, cohortJoinAddress string) *Store {
+
 	if nodeID == "" {
 		nodeID = "node-" + common.RandNodeID(common.NodeIDLen)
 	}
@@ -74,7 +82,7 @@ func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSin
 		l.Fatalf("Unable to setup raft instance for kv store:%s", err)
 	}
 	s.raft = ra
-	go startCohort(s, rpcAddress)
+	go startCohort(s, rpcAddress, "c-"+s.ID, cohortRaftAddress, "c-"+s.RaftDir, enableSingle, cohortJoinAddress)
 	return s
 }
 
@@ -86,7 +94,11 @@ func (s *Store) Start(joinHTTPAddress, id string) {
 		return
 	}
 	var response raftpb.RPCResponse
-	msg := &raftpb.JoinMsg{RaftAddress: s.RaftAddress, ID: id}
+	msg := &raftpb.JoinMsg{
+		RaftAddress: s.RaftAddress,
+		ID:          id,
+		TYPE:        StoreInstance,
+	}
 
 	client, err := rpc.DialHTTP("tcp", joinHTTPAddress)
 	if err != nil {

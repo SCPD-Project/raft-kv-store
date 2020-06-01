@@ -19,10 +19,14 @@ import (
 // Cohort maintains state of the cohort state machine. It also starts
 // a rpc server to listen to commands from coordinator.
 type Cohort struct {
+	ID          string
+	RaftDir     string
+	RaftAddress string
+
 	store *Store
 
 	// TODO: raft instance to replicate fsm of cohort
-	cohortRaft *raft.Raft
+	raft *raft.Raft
 
 	// replicate cohort state
 	// txid -> tx cmds for this cohort(shard)
@@ -32,10 +36,13 @@ type Cohort struct {
 	mu sync.Mutex
 }
 
-func startCohort(store *Store, listenAddress string) {
+func startCohort(store *Store, listenAddress string, nodeID, raftAddress, raftDir string, enableSingle bool, cohortJoinAddress string) {
 	c := &Cohort{
-		store:  store,
-		opsMap: make(map[string]*raftpb.ShardOps),
+		ID:          nodeID,
+		RaftAddress: raftAddress,
+		RaftDir:     raftDir,
+		store:       store,
+		opsMap:      make(map[string]*raftpb.ShardOps),
 	}
 	rpc.Register(c)
 	rpc.HandleHTTP()
@@ -44,9 +51,41 @@ func startCohort(store *Store, listenAddress string) {
 		log.Fatal("listen error:", err)
 	}
 	go http.Serve(listener, nil)
-	c.store.log.Infof("RPC server started successfully on :%s", listenAddress)
 
 	// setup raft for cohort
+	ra, err := common.SetupRaft((*cohortfsm)(c), c.ID, c.RaftAddress, c.RaftDir, enableSingle)
+	if err != nil {
+		c.store.log.Fatalf("Unable to setup raft instance for cohort store:%s", err)
+	}
+	c.raft = ra
+	c.start(cohortJoinAddress, c.ID)
+	c.store.log.Infof("cohort setup successfully raftAddress:%s listenAddress:%s", c.RaftAddress, listenAddress)
+
+}
+
+// Start ...
+func (c *Cohort) start(joinHTTPAddress, id string) {
+
+	// no op if you are leader
+	if joinHTTPAddress == "" {
+		return
+	}
+	var response raftpb.RPCResponse
+	msg := &raftpb.JoinMsg{
+		RaftAddress: c.RaftAddress,
+		ID:          id,
+		TYPE:        CohortInstance,
+	}
+
+	client, err := rpc.DialHTTP("tcp", joinHTTPAddress)
+	if err != nil {
+		c.store.log.Fatalf("Unable to reach leader: %s", err)
+	}
+
+	err = client.Call("Cohort.ProcessJoin", msg, &response)
+	if err != nil {
+		c.store.log.Fatalf("Unable to join cluster: %s", err)
+	}
 }
 
 // ProcessCommands will process simple Get/Set (non-transactional) cmds from
@@ -128,7 +167,6 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 		//raft call, once raft is setup.
 		ops.Phase = common.Prepared
 
-
 	case common.Commit:
 		if c.opsMap[ops.Txid].Phase != common.Prepared {
 			// this should never happen
@@ -187,10 +225,52 @@ func (c *Cohort) ProcessReadOnly(ops *raftpb.ShardOps, reply *raftpb.RPCResponse
 	return nil
 }
 
+// Join joins a node, identified by nodeID and located at addr, to this store.
+// The node must be ready to respond to Raft communications at that address.
+// Note: Ideally, we would like to avoid duplicate code. But this is specific to
+// to each raft instance. An interface wouldn't be helpful each type has to implement
+// it again resulting in duplicate code.
+func (c *Cohort) join(nodeID, addr string) error {
+	c.store.log.Infof("received join request for remote node %s at %s", nodeID, addr)
+
+	configFuture := c.raft.GetConfiguration()
+	if err := configFuture.Error(); err != nil {
+		c.store.log.Infof("failed to get raft configuration: %v", err)
+		return err
+	}
+
+	for _, srv := range configFuture.Configuration().Servers {
+		// If a node already exists with either the joining node's ID or address,
+		// that node may need to be removed from the config first.
+		if srv.ID == raft.ServerID(nodeID) || srv.Address == raft.ServerAddress(addr) {
+			// However if *both* the ID and the address are the same, then nothing -- not even
+			// a join operation -- is needed.
+			if srv.Address == raft.ServerAddress(addr) && srv.ID == raft.ServerID(nodeID) {
+				c.store.log.Infof("node %s at %s already member of cluster, ignoring join request", nodeID, addr)
+				return nil
+			}
+
+			future := c.raft.RemoveServer(srv.ID, 0, 0)
+			if err := future.Error(); err != nil {
+				return fmt.Errorf("error removing existing node %s at %s: %s", nodeID, addr, err)
+			}
+		}
+	}
+
+	f := c.raft.AddVoter(raft.ServerID(nodeID), raft.ServerAddress(addr), 0, 0)
+	if f.Error() != nil {
+		return f.Error()
+	}
+	c.store.log.Infof("node %s at %s joined successfully", nodeID, addr)
+	return nil
+}
 
 // ProcessJoin processes join message.
 // TODO: Use this to join cohort raft as well.
 func (c *Cohort) ProcessJoin(joinMsg *raftpb.JoinMsg, reply *raftpb.RPCResponse) error {
-	return c.store.Join(joinMsg.ID, joinMsg.RaftAddress)
-}
 
+	if joinMsg.TYPE == StoreInstance {
+		return c.store.Join(joinMsg.ID, joinMsg.RaftAddress)
+	}
+	return c.join(joinMsg.ID, joinMsg.RaftAddress)
+}
