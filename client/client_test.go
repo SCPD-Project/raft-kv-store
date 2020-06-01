@@ -140,8 +140,8 @@ func TestMultiClients(t *testing.T) {
 		clients = append(clients, NewRaftKVClient(":17000"))
 		clients[i].txnCmds = &raftpb.RaftCommand{
 			Commands: []*raftpb.Command{
-				{Method: common.SET, Key: "test3", Value: int64(i)},
-				{Method: common.SET, Key: "test4", Value: int64(-i)},
+				{Method: common.DEL, Key: "test3", Value: int64(i)},
+				{Method: common.DEL, Key: "test4", Value: int64(-i)},
 			},
 			IsTxn: true,
 		}

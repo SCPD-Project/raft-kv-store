@@ -11,8 +11,10 @@ import (
 	"github.com/subchen/go-trylock/v2"
 )
 
+const LongTimeOut = 100 * time.Microsecond
+
 type Value struct {
-	k string
+	k    string // For debug purpose
 	V    interface{}
 	mu   trylock.TryLocker
 	temp bool
@@ -21,7 +23,7 @@ type Value struct {
 
 func NewValue(k string, v interface{}) *Value {
 	return &Value{
-		k : k,
+		k:  k,
 		V:  v,
 		mu: trylock.New(),
 	}
@@ -29,7 +31,7 @@ func NewValue(k string, v interface{}) *Value {
 
 func TempNewValue(k string, v interface{}) *Value {
 	return &Value{
-		k: k,
+		k:    k,
 		V:    v,
 		mu:   trylock.New(),
 		temp: true,
@@ -186,7 +188,7 @@ func (c *Cmap) TryLocks(ops []*raftpb.Command, txid string) error {
 		if !ok {
 			// Handle new values
 			// Put temp flag to delete if abort
-			value = TempNewValue(k,nil)
+			value = TempNewValue(k, nil)
 			tmpMap[k] = value
 		}
 		// trylock on each value including new init
@@ -223,7 +225,7 @@ func (c *Cmap) TryLocks(ops []*raftpb.Command, txid string) error {
 	} else {
 		for _, value := range locked {
 			value.txid = txid
-			c.log.Infof( "LOCKED for key %s in %s", value.k, value.txid)
+			c.log.Infof("LOCKED for key %s in %s", value.k, value.txid)
 		}
 	}
 	return nil
@@ -281,7 +283,7 @@ func (c *Cmap) AbortWithLocks(ops []*raftpb.Command, txid string) {
 			// delete key is temp when aborting
 			delete(c.Map, op.Key)
 		}
-		val.mu.TryLockTimeout(c.timeout * 100)
+		val.mu.TryLockTimeout(LongTimeOut)
 		val.mu.Unlock()
 		c.log.Infof("txid %s UNLOCK when trying to abort %v", txid, ops)
 	}
