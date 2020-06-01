@@ -43,6 +43,7 @@ const (
 	NodeIDLen           = 5
 
 	MagicDiff = 20000
+	RaftPVBaseDir = "/pv"
 )
 
 var (
