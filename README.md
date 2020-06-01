@@ -61,8 +61,9 @@ bin/kv -i node-8 -l :17002 -r :18002 -c -j :17000
 bin/client -e :17000
 ```
 Client commands:
-- `get [key]`: get value from RAFT KV store
+- `get [key]`: get value of a key from RAFT KV store
   - Examples: `get class` or `get "distributed system"`
+  - If the `[key]` does not exist, return message `Key=[key] does not exist`
 - `set [key] [value]`: put (key, value) on RAFT KV store
   - Examples: `put universe 42` or `put "2020 spring class students" 100`
 - `del [key]`: delete key from RAFT KV store
@@ -77,32 +78,16 @@ Client commands:
    del class
    end
    ```
+- `add [key] [value]`: add value to an existing key 
+  - Example: `add "my account" 100`
+- `sub [key] [value]`: subtract value to an existing key 
+  - Example: `sub "my account" 50`
+- `xfer [from-key] [to-key] [value]`: transfer value from one key to another
+  - Example: `xfer bank-A bank-B 50` 
+  - If either of `[key]` does not exist, return message `Key=[key] does not exist`  
+  - If `[from-key]` has a current value less than `[value]`, return message `Insufficient funds`
 - `exit`: exit client from server
 
-## Leader:
-```
-curl localhost:17000/leader
-```
-
-## Put
-```
-curl -v localhost:17000/key -d '{"class-3": "cs244b5"}'
-```
-
-## Get:
-```
-curl -v localhost:17000/key/class-3
-```
-
-## Transactions:
-```
-curl -vvv localhost:17000/transaction -d '{"commands": [{"Command": "set", "Key": "name", "Value": "John"},{"Command": "set", "Key": "timezone", "Value": "pst"}]}'
-```
-
-## Get:
-```
-curl -vvv localhost:17000/key/timezone
-```
 
 ## License
 
