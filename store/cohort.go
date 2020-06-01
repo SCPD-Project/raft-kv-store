@@ -67,14 +67,8 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *raftpb.
 			}
 			return nil
 		} else if !ok {
-			*reply = raftpb.RPCResponse{
-				Status: -1,
-			}
 			return fmt.Errorf("Key=%s does not exist", command.Key)
 		} else {
-			*reply = raftpb.RPCResponse{
-				Status: -1,
-			}
 			return err
 		}
 	case common.LEADER:
@@ -82,10 +76,6 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *raftpb.
 			*reply = raftpb.RPCResponse{
 				Status: 0,
 				Addr:   c.store.rpcAddress,
-			}
-		} else {
-			*reply = raftpb.RPCResponse{
-				Status: -1,
 			}
 		}
 		return nil
@@ -99,15 +89,12 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *raftpb.
 
 	applyFuture := c.store.raft.Apply(b, common.RaftTimeout)
 	if err := applyFuture.Error(); err != nil {
-		*reply = raftpb.RPCResponse{
-			Status: -1,
-		}
 		return err
 	}
 
 	resp, ok := applyFuture.Response().(*FSMApplyResponse)
+	*reply = resp.reply
 	if ok && resp.err != nil {
-		*reply = resp.reply
 		return resp.err
 	}
 
@@ -130,10 +117,6 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 
 		if err := c.store.kv.TryLocks(ops.Cmds.Commands); err != nil {
 			// If it fails to get some of the lock, prepare should return "No"
-			*reply = raftpb.RPCResponse{
-				Status: -1,
-				Phase:  common.NotPrepared,
-			}
 			// no need to update cohort state machine, it is equivalent to a no transaction.
 			return err
 		}
@@ -149,10 +132,6 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 	case common.Commit:
 		if c.opsMap[ops.Txid].Phase != common.Prepared {
 			// this should never happen
-			*reply = raftpb.RPCResponse{
-				Status: -1,
-				Phase:  common.Invalid,
-			}
 			return errors.New("invalid state")
 		}
 
@@ -194,10 +173,6 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 func (c *Cohort) ProcessReadOnly(ops *raftpb.ShardOps, reply *raftpb.RPCResponse) error {
 	m, err := c.store.kv.MGet(ops.Cmds.Commands)
 	if err != nil {
-		*reply = raftpb.RPCResponse{
-			Status: -1,
-			Phase:  common.NotPrepared,
-		}
 		return err
 	}
 	var res []*raftpb.Command
