@@ -4,27 +4,27 @@ package raftpb;
 option go_package = "raftpb";
 
 message Command {
-    string method = 1;
-    string key = 2;
-    int64 value = 5;
-    GlobalTransaction gt = 6;
-    Cond cond = 4;
+    string method           = 1;
+    string key              = 2;
+    int64 value             = 3;
+    GlobalTransaction gt    = 4;
+    Cond cond               = 5;
 }
 
 message Cond {
-    string key = 1;
+    string key  = 1;
     int64 value = 2;
 }
 
 // GlobalTransaction captures the info of entire transaction
 message GlobalTransaction {
-    string txid = 1;
-    RaftCommand cmds = 2;
+    string txid                             = 1;
+    RaftCommand cmds                        = 2;
     // Cohorts consists of leader's of all the shards.
     // TODO: It can be used for transaction stats etc in the future.
-    repeated string cohorts = 3;
-    map<int64, ShardOps> shard_to_commands = 4;
-    string phase = 5;
+    repeated string cohorts                 = 3;
+    map<int64, ShardOps> shard_to_commands  = 4;
+    string phase                            = 5;
 }
 
 message TxidMap {
@@ -32,29 +32,29 @@ message TxidMap {
 }
 
 message ShardOps {
-    string txid = 1;
-    string master_key = 2;
-    RaftCommand cmds = 3;
-    string phase = 4;
-    bool readOnly = 5;
+    string txid         = 1;
+    string master_key   = 2;
+    RaftCommand cmds    = 3;
+    string phase        = 4;
+    bool readOnly       = 5;
 }
 
 message RPCResponse {
-    int32 status = 1;
-    int64 value = 2;
-    string addr = 3;
-    string phase = 4;
-    repeated Command commands = 5;
+    int32 status                = 1;
+    int64 value                 = 2;
+    string addr                 = 3;
+    string phase                = 4;
+    repeated Command commands   = 5;
     
 }
 
 message RaftCommand {
-    repeated Command commands = 1;
+    repeated Command commands   = 1;
     // To ensure handled by ApplyTransaction
-    bool is_txn = 2;
+    bool is_txn                 = 2;
 }
 
 message JoinMsg {
-    string RaftAddress = 1;
-    string ID = 2;
+    string RaftAddress  = 1;
+    string ID           = 2;
 }
