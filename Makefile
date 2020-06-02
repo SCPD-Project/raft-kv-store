@@ -14,3 +14,4 @@ proto:
 
 clean:
 	rm -rf node-*
+	rm -rf cohort*

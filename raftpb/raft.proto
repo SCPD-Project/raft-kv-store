@@ -9,6 +9,7 @@ message Command {
     int64 value             = 3;
     GlobalTransaction gt    = 4;
     Cond cond               = 5;
+    ShardOps so             = 6;
 }
 
 message Cond {
@@ -29,6 +30,10 @@ message GlobalTransaction {
 
 message TxidMap {
     map<string, GlobalTransaction> map = 1;
+}
+
+message OpsMap {
+    map<string, ShardOps> map = 1;
 }
 
 message ShardOps {
@@ -55,6 +60,7 @@ message RaftCommand {
 }
 
 message JoinMsg {
-    string RaftAddress  = 1;
-    string ID           = 2;
+    string RaftAddress = 1;
+    string ID = 2;
+    string TYPE = 3;
 }

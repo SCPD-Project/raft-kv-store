@@ -18,9 +18,9 @@ The distributed transactions across shards is achieved using two-phase commit pr
 make proto
 ```
 
-## Build Program
+## Build Program locally
 ```
-make build
+make build-local
 ```
 
 ## Start the container
@@ -37,19 +37,19 @@ TODO: Remove this once we have the cluster
 ```
 ## Start KV Shard-1
 ```
-bin/kv -i node-0 -l :11000 -r :12000
+bin/kv -i node-0 -l :11000 -r :12000 
 bin/kv -i node-1 -l :11001 -r :12001 -j :11000 
 bin/kv -i node-2 -l :11002 -r :12002 -j :11000
 ```
 
 ## Start KV Shard-2
 ```
-bin/kv -i node-3 -l :15000 -r :16000
+bin/kv -i node-3 -l :15000 -r :16000 
 bin/kv -i node-4 -l :15001 -r :16001 -j :15000 
 bin/kv -i node-5 -l :15002 -r :16002 -j :15000
 ```
 
-## Start Coordinator (Only 1 for now)
+## Start Coordinator
 ```
 bin/kv -i node-6 -l :17000 -r :18000 -c
 bin/kv -i node-7 -l :17001 -r :18001 -c -j :17000
@@ -87,7 +87,6 @@ Client commands:
   - If either of `[key]` does not exist, return message `Key=[key] does not exist`  
   - If `[from-key]` has a current value less than `[value]`, return message `Insufficient funds`
 - `exit`: exit client from server
-
 
 ## License
 
