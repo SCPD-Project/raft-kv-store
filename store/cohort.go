@@ -148,32 +148,32 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 			return c.ProcessReadOnly(ops, reply)
 		}
 
-		// This should be replicated via raft with raft Apply, once setup
-		// if raft fails, send NotPrepared. log 2 pc message
-		c.opsMap[ops.Txid] = ops
-
 		if err := c.store.kv.TryLocks(ops.Cmds.Commands, ops.Txid); err != nil {
 			// If it fails to get some of the lock, prepare should return "No"
 			// no need to update cohort state machine, it is equivalent to a no transaction.
 			return err
 		}
-		*reply = raftpb.RPCResponse{
-			Status: 0,
-			Phase:  common.Prepared,
-		}
-		// below should be
-		//raft call, once raft is setup.
+
+		// This should be replicated via raft with raft Apply, once setup
+		// if raft fails, send NotPrepared. log 2 pc message
 		ops.Phase = common.Prepared
+		err := c.replicate(ops.Txid, common.SET, ops)
+		if err == nil {
+			*reply = raftpb.RPCResponse{
+				Status: 0,
+				Phase:  common.Prepared,
+			}
+			return nil
+		}
+		// Note: this is fine to do. Coordinator will
+		// send abort and release the locks taken above
+		return errors.New("Unable to replicate during prepare")
 
 	case common.Commit:
 		if c.opsMap[ops.Txid].Phase != common.Prepared {
 			// this should never happen
 			return errors.New("invalid state")
 		}
-
-		// log 2 pc commit message, replicate via raft
-		ops.Phase = common.Committed
-		c.opsMap[ops.Txid] = ops
 
 		//Apply to fsm
 		b, err := proto.Marshal(ops.Cmds)
@@ -186,23 +186,40 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 			c.store.log.Warnf("Unable to apply operations to kv raft instance: %s", f.Error())
 		}
 
-		*reply = raftpb.RPCResponse{
-			Status: 0,
-			Phase:  common.Committed,
+		// log 2 pc commit message, replicate via raft
+		ops.Phase = common.Committed
+		err = c.replicate(ops.Txid, common.SET, ops)
+		if err == nil {
+			*reply = raftpb.RPCResponse{
+				Status: 0,
+				Phase:  common.Committed,
+			}
+			return nil
 		}
+		// Note: this is fine to do. Coordinator will
+		// will eventually try again during recovery
+		return errors.New("Unable to replicate during commit phase")
 
 	case common.Abort:
 
+		c.store.kv.AbortWithLocks(ops.Cmds.Commands, ops.Txid)
 		// log 2 pc abort message, replicate via raft
 		// this should be set operation on raft
-		c.opsMap[ops.Txid].Phase = common.Abort
-		c.store.kv.AbortWithLocks(ops.Cmds.Commands, ops.Txid)
-		*reply = raftpb.RPCResponse{
-			Status: 0,
-			Phase:  common.Aborted,
+		ops.Phase = common.Abort
+		err := c.replicate(ops.Txid, common.SET, ops)
+		if err == nil {
+			*reply = raftpb.RPCResponse{
+				Status: 0,
+				Phase:  common.Abort,
+			}
+			return nil
 		}
+		// Note: this is fine to do. Coordinator will
+		// will eventually try again during recovery
+		return errors.New("Unable to replicate during Abort")
 
 	}
+
 	return nil
 }
 
@@ -270,4 +287,43 @@ func (c *Cohort) ProcessJoin(joinMsg *raftpb.JoinMsg, reply *raftpb.RPCResponse)
 		return c.store.Join(joinMsg.ID, joinMsg.RaftAddress)
 	}
 	return c.join(joinMsg.ID, joinMsg.RaftAddress)
+}
+
+// replicate replicates put/deletes on cohort's
+// state machine
+func (c *Cohort) replicate(key, op string, so *raftpb.ShardOps) error {
+
+	var cmd *raftpb.RaftCommand
+	switch op {
+
+	case common.SET:
+		cmd = &raftpb.RaftCommand{
+			Commands: []*raftpb.Command{
+				{
+					Method: op,
+					Key:    key,
+					So:     so,
+				},
+			},
+		}
+
+	case common.DEL:
+		cmd = &raftpb.RaftCommand{
+			Commands: []*raftpb.Command{
+				{
+					Method: op,
+					Key:    key,
+				},
+			},
+		}
+	}
+
+	b, err := proto.Marshal(cmd)
+	if err != nil {
+		return err
+	}
+
+	f := c.raft.Apply(b, common.RaftTimeout)
+
+	return f.Error()
 }
