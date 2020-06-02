@@ -6,7 +6,6 @@ import (
 	"os/signal"
 	"path"
 	"runtime"
-	"strconv"
 	"strings"
 
 	nested "github.com/antonfisher/nested-logrus-formatter"
@@ -24,8 +23,6 @@ const (
 
 	DefaultCoordinatorListenAddress = "localhost:21000"
 	DefaultCoordinatorRaftAddress   = "localhost:22000"
-
-	MagicDiff = 20000
 )
 
 // Command line parameters
@@ -88,12 +85,7 @@ func main() {
 
 		// derive raftaddress for cohort
 		if cohortRaftAddress == "" {
-			ipPort := strings.Split(raftAddress, ":")
-			port, err := strconv.ParseInt(ipPort[1], 10, 32)
-			if err != nil {
-				log.Fatalf("Invalid raft port for store: %s", err)
-			}
-			cohortRaftAddress = ipPort[0] + ":" + strconv.Itoa(int(port+MagicDiff))
+			cohortRaftAddress = common.GetDerivedAddress(raftAddress)
 		}
 		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", listenAddress, bucketName, cohortRaftAddress, joinHTTPAddress)
 		kv.Start(joinHTTPAddress, nodeID)

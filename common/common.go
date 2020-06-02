@@ -7,6 +7,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/raft"
@@ -39,6 +41,8 @@ const (
 	RetainSnapshotCount = 2
 	RaftTimeout         = 10 * time.Second
 	NodeIDLen           = 5
+
+	MagicDiff = 20000
 )
 
 var (
@@ -113,4 +117,16 @@ func SetupRaft(fsm raft.FSM, id, raftAddress, raftDir string, enableSingle bool)
 	}
 
 	return ra, nil
+}
+
+// GetDerivedAddress derives a new IP:Port from a given
+// address.
+func GetDerivedAddress(address string) string {
+
+	ipPort := strings.Split(address, ":")
+	port, err := strconv.ParseInt(ipPort[1], 10, 32)
+	if err != nil {
+		log.Fatalf("Invalid raft port for store: %s", err)
+	}
+	return ipPort[0] + ":" + strconv.Itoa(int(port+MagicDiff))
 }
