@@ -15,9 +15,8 @@ type fsm Store
 
 type FSMApplyResponse struct {
 	reply raftpb.RPCResponse
-	err error
+	err   error
 }
-
 
 // Apply applies a Raft log entry to the key-value store.
 func (f *fsm) Apply(l *raft.Log) interface{} {
@@ -76,46 +75,49 @@ func (f *fsm) Restore(_ io.ReadCloser) error {
 }
 
 func (f *fsm) applySet(key string, value int64) interface{} {
-	if err := f.kv.Set(key, value); err == nil {
+
+	err := f.kv.Set(key, value)
+	if err == nil {
 		return &FSMApplyResponse{
 			reply: raftpb.RPCResponse{Status: 0},
 		}
-	} else {
-		f.log.Infof(err.Error())
-		return &FSMApplyResponse{
-			err: err,
-			reply: raftpb.RPCResponse{Status: -1},
-		}
 	}
-	return nil
+	f.log.Infof(err.Error())
+	return &FSMApplyResponse{
+		err:   err,
+		reply: raftpb.RPCResponse{Status: -1},
+	}
+
 }
 
 func (f *fsm) applySetCond(key string, value, value0 int64) interface{} {
-	if err := f.kv.SetCond(key, value, value0); err == nil {
+
+	err := f.kv.SetCond(key, value, value0)
+	if err == nil {
 		return &FSMApplyResponse{
 			reply: raftpb.RPCResponse{Status: 0},
 		}
-	} else {
-		return &FSMApplyResponse{
-			err: err,
-			reply: raftpb.RPCResponse{Status: -1},
-		}
 	}
-	return nil
+
+	return &FSMApplyResponse{
+		err:   err,
+		reply: raftpb.RPCResponse{Status: -1},
+	}
+
 }
 
 func (f *fsm) applyDelete(key string) interface{} {
-	if err := f.kv.Del(key); err == nil {
+	err := f.kv.Del(key)
+	if err == nil {
 		return &FSMApplyResponse{
 			reply: raftpb.RPCResponse{Status: 0},
 		}
-	} else {
-		return &FSMApplyResponse{
-			err: err,
-			reply: raftpb.RPCResponse{Status: -1},
-		}
 	}
-	return nil
+	return &FSMApplyResponse{
+		err:   err,
+		reply: raftpb.RPCResponse{Status: -1},
+	}
+
 }
 
 // return transaction result
