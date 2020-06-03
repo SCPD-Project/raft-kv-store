@@ -4,8 +4,8 @@ function usage () {
 cat <<HELP_USAGE
 Usage: $0  -n <node> -t <timeout> -r
 -n    Name of the node
--t    Time to recovery, if missing never recovered
--r    If set, recovered with restarting
+-t    Time to recovery, if missing never recover
+-r    If set, recover with restarting
 HELP_USAGE
 }
 
