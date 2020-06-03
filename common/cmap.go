@@ -3,6 +3,7 @@ package common
 import (
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"sync"
 	"time"
 
@@ -98,9 +99,10 @@ func (c *Cmap) Get(k string) (val interface{}, ok bool, err error) {
 
 // MGet is multiple get
 // inexistence and error are put together
-func (c *Cmap) MGet(ops []*raftpb.Command) (map[string]interface{}, error) {
+func (c *Cmap) MGet(ops []*raftpb.Command, txid string) (map[string]interface{}, error) {
+	timeout := txTimeout(txid)
 	res := make(map[string]interface{})
-	if global := c.mu.RTryLockTimeout(c.timeout); !global {
+	if global := c.mu.RTryLockTimeout(timeout); !global {
 		return res, errors.New("map is locked globally")
 	}
 	defer c.mu.RUnlock()
@@ -111,7 +113,7 @@ func (c *Cmap) MGet(ops []*raftpb.Command) (map[string]interface{}, error) {
 		value, ok := c.Map[op.Key]
 		if !ok {
 			return nil, fmt.Errorf("Key=%s does not exist", op.Key)
-		} else if local := value.mu.RTryLockTimeout(c.timeout); !local {
+		} else if local := value.mu.RTryLockTimeout(timeout); !local {
 			return nil, fmt.Errorf("map is locked on Key=%s", op.Key)
 		}
 		res[op.Key] = value.V
@@ -169,10 +171,11 @@ func (c *Cmap) Del(k string) error {
 }
 
 func (c *Cmap) TryLocks(ops []*raftpb.Command, txid string) error {
+	timeout := txTimeout(txid)
 	if len(ops) == 0 {
 		return errors.New("no key given")
 	}
-	if global := c.mu.TryLockTimeout(c.timeout); !global {
+	if global := c.mu.TryLockTimeout(timeout); !global {
 		return errors.New("map is locked globally")
 	}
 	// locked is used to revert lock if any trylock fails
@@ -190,7 +193,7 @@ func (c *Cmap) TryLocks(ops []*raftpb.Command, txid string) error {
 			tmpMap[k] = value
 		}
 		// trylock on each value including new init
-		if local := value.mu.TryLockTimeout(c.timeout); !local {
+		if local := value.mu.TryLockTimeout(timeout); !local {
 			revert = true
 			break
 		} else {
@@ -326,7 +329,7 @@ type ConcurrentMap interface {
 	benchmarkSet(string, interface{}, interface{}, time.Duration) error
 }
 
-func (c *Cmap) Debug(log *log.Entry, s string, k ...string) {
+func (c *Cmap) Debug(s string, k ...string) {
 	if c.mu.TryLockTimeout(10) {
 		c.log.Debugf("store NOT LOCKED in %s ", s)
 		c.mu.Unlock()
@@ -343,4 +346,12 @@ func (c *Cmap) Debug(log *log.Entry, s string, k ...string) {
 	} else {
 		c.log.Debugf("store LOCKED in PRE ")
 	}
+}
+
+func txTimeout(txid string) time.Duration {
+	h := fnv.New32a()
+	h.Write([]byte(txid))
+	t := time.Duration(h.Sum32() % 10000) * time.Microsecond + LockContention
+	log.Printf("%s -> %t", txid, t)
+	return t
 }

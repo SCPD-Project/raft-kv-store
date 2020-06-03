@@ -70,7 +70,7 @@ func (f *fsm) Restore(_ io.ReadCloser) error {
 	for k, v := range rst {
 		o[k] = v
 	}
-	f.kv = common.NewCmapFromMap(f.log.Logger, o, LockContention)
+	f.kv = common.NewCmapFromMap(f.log.Logger, o, common.LockContention)
 	return nil
 }
 
