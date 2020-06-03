@@ -30,6 +30,7 @@ func (s *Service) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.coordinator.Join(joinMsg.ID, joinMsg.RaftAddress); err != nil {
+		s.log.Error(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}

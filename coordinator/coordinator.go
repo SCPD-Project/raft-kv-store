@@ -1,9 +1,9 @@
 package coordinator
 
 import (
-	"fmt"
 	"net/rpc"
 	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -37,16 +37,18 @@ type Coordinator struct {
 
 // NewCoordinator initialises the new coordinator instance
 func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSingle bool) *Coordinator {
-
 	if nodeID == "" {
 		nodeID = "node-" + common.RandNodeID(common.NodeIDLen)
 	}
+
 	if raftDir == "" {
-		raftDir = fmt.Sprintf("./%s", nodeID)
+		raftDir, _ = os.Hostname()
 	}
+
 	log := logger.WithField("component", "coordinator")
-	log.Infof("Preparing node-%s with persistent directory %s, raftAddress %s", nodeID, raftDir, raftAddress)
-	os.MkdirAll(raftDir, 0700)
+	coordDir := filepath.Join(common.RaftPVBaseDir, raftDir, "coords")
+	log.Infof("Preparing node-%s with persistent directory %s, raftAddress %s", nodeID, coordDir, raftAddress)
+	os.MkdirAll(coordDir, 0700)
 
 	shardsInfo, err := config.GetShards()
 	if err != nil {
@@ -60,8 +62,7 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 	c := &Coordinator{
 		ID:          nodeID,
 		RaftAddress: raftAddress,
-		RaftDir:     raftDir,
-
+		RaftDir:     coordDir,
 		ShardToPeers: shardToPeers,
 		txMap:        make(map[string]*raftpb.GlobalTransaction),
 		log:          log,

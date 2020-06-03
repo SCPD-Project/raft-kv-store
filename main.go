@@ -87,9 +87,8 @@ func main() {
 		if cohortRaftAddress == "" {
 			cohortRaftAddress = common.GetDerivedAddress(raftAddress)
 		}
-		kv := store.NewStore(logger, nodeID, raftAddress, raftDir, joinHTTPAddress == "", listenAddress, bucketName, cohortRaftAddress, joinHTTPAddress)
+		kv := store.NewStore(logger, nodeID, raftDir, raftAddress, joinHTTPAddress == "", listenAddress, bucketName, cohortRaftAddress, joinHTTPAddress)
 		kv.Start(joinHTTPAddress, nodeID)
-
 	}
 
 	log.Info("raftd started successfully")

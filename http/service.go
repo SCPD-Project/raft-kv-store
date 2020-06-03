@@ -57,12 +57,8 @@ func (s *Service) Start(joinHTTPAddress string) {
 		}
 	}()
 
-	var raftAddress, id string
-	raftAddress = s.coordinator.RaftAddress
-	id = s.coordinator.ID
-
 	if joinHTTPAddress != "" {
-		msg := &raftpb.JoinMsg{RaftAddress: raftAddress, ID: id}
+		msg := &raftpb.JoinMsg{RaftAddress: s.coordinator.RaftAddress, ID: s.coordinator.ID}
 		b, err := proto.Marshal(msg)
 		if err != nil {
 			s.log.Fatalf("error when marshaling %+v", msg)
