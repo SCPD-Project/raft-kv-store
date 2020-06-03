@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-
+mkdir -p /pv/logs
 if [ -n "$BOOTSTRAP_LEADER" ];then
   echo "$(hostname) is configured as leader"
   echo "Starting Shard Services"
