@@ -44,6 +44,8 @@ const (
 
 	MagicDiff = 20000
 	RaftPVBaseDir = "/pv"
+	LockContention      = 1 * time.Microsecond // This can be change to test concurrentMap performance
+
 )
 
 var (

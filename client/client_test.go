@@ -1,6 +1,11 @@
 package client
 
 import (
+	"fmt"
+	"log"
+	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -8,6 +13,8 @@ import (
 	"github.com/raft-kv-store/raftpb"
 	"github.com/stretchr/testify/assert"
 )
+
+const coordAddr = "127.0.0.1:17000"
 
 func (c *raftKVClient) appendTestCmds(method, key string, value ...int64) {
 	switch method {
@@ -131,28 +138,77 @@ func TestClient(t *testing.T) {
 
 }
 
-//
-//func TestMultiClients(t *testing.T) {
-//	var clients []*raftKVClient
-//	for i := 0; i < 15; i++ {
-//		clients = append(clients, NewRaftKVClient(":17000"))
-//		clients[i].txnCmds = &raftpb.RaftCommand{
-//			Commands: []*raftpb.Command{
-//				{Method: common.SET, Key: "test3", Value: int64(i)},
-//				{Method: common.SET, Key: "test4", Value: int64(-i)},
-//			},
-//			IsTxn: true,
-//		}
-//	}
-//	var wg sync.WaitGroup
-//	for _, c := range clients {
-//		wg.Add(1)
-//		go func(c *raftKVClient) {
-//			defer wg.Done()
-//			res, err := c.Transaction()
-//			fmt.Println(res, err, c.txnCmds)
-//		}(c)
-//	}
-//	wg.Wait()
-//}
 
+func TestMultiClientsMultiGet(t *testing.T) {
+	var success int32
+	var clients []*raftKVClient
+	for i := 0; i < 300; i++ {
+		clients = append(clients, NewRaftKVClient(coordAddr))
+	}
+	var wg sync.WaitGroup
+	for i, c := range clients {
+		wg.Add(1)
+		go func(c *raftKVClient) {
+			defer wg.Done()
+			if err := c.Get(strconv.Itoa(i)); err == nil || err.Error() == fmt.Sprintf("Key=%d does not exist", i) {
+				atomic.AddInt32(&success, 1)
+			} else {
+				fmt.Println(err.Error())
+			}
+		}(c)
+	}
+	wg.Wait()
+	fmt.Println(success)
+}
+
+
+
+func TestMultiClientsMultiSet(t *testing.T) {
+	c := NewRaftKVClient(coordAddr)
+	c.Delete("x")
+	c.Delete("y")
+	var clients []*raftKVClient
+	for i := 0; i < 5; i++ {
+		clients = append(clients, NewRaftKVClient(coordAddr))
+		clients[i].txnCmds = &raftpb.RaftCommand{
+			Commands: []*raftpb.Command{
+				{Method: common.SET, Key: "x", Value: int64(i+1)},
+				{Method: common.SET, Key: "y", Value: int64(-i-1)},
+			},
+			IsTxn: true,
+		}
+	}
+	var wg sync.WaitGroup
+	for _, c := range clients {
+		wg.Add(1)
+		go func(c *raftKVClient) {
+			defer wg.Done()
+			_, err := c.Transaction()
+			fmt.Println(err)
+		}(c)
+	}
+	wg.Wait()
+	log.Println(c.Get("y"))
+}
+
+
+func TestMultiXfer(t *testing.T) {
+	c := NewRaftKVClient(coordAddr)
+	c.Set("x", 1000)
+	c.Set("y", 0)
+	var clients []*raftKVClient
+	for i := 0; i < 50; i++ {
+		clients = append(clients, NewRaftKVClient(coordAddr))
+	}
+	var wg sync.WaitGroup
+	for _, c := range clients {
+		wg.Add(1)
+		go func(c *raftKVClient) {
+			defer wg.Done()
+			err := c.TransferTransaction([]string{common.TRANSFER, "x", "y", "1"})
+			fmt.Println(err)
+		}(c)
+	}
+	wg.Wait()
+	log.Println(c.Get("y"))
+}

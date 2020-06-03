@@ -224,7 +224,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 }
 
 func (c *Cohort) ProcessReadOnly(ops *raftpb.ShardOps, reply *raftpb.RPCResponse) error {
-	m, err := c.store.kv.MGet(ops.Cmds.Commands)
+	m, err := c.store.kv.MGet(ops.Cmds.Commands, ops.Txid)
 	if err != nil {
 		return err
 	}

@@ -12,7 +12,6 @@ import (
 	"net/rpc"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/raft-kv-store/common"
@@ -22,7 +21,6 @@ import (
 
 const (
 	SnapshotPersistFile = "persistedKeyValues.db"
-	LockContention      = 1 * time.Microsecond // This can be change to test concurrentMap performance
 	ShardsDirectory = "/raft-store/shards"
 	// StoreInstance is used to identify the type of raft instance
 	StoreInstance  = "Store"
@@ -70,7 +68,7 @@ func NewStore(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSin
 	s := &Store{
 		ID:                nodeID,
 		RaftAddress:       raftAddress,
-		kv:                common.NewCmap(logger, LockContention),
+		kv:                common.NewCmap(logger, common.LockContention),
 		log:               l,
 		rpcAddress:        rpcAddress,
 		persistKvDbConn:   persistDbConn,
