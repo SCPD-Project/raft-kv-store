@@ -21,13 +21,12 @@ import (
 
 const (
 	SnapshotPersistFile = "persistedKeyValues.db"
-)
-
-const (
+	ShardsDirectory = "/raft-store/shards"
 	// StoreInstance is used to identify the type of raft instance
 	StoreInstance  = "Store"
 	CohortInstance = "Cohort"
 )
+
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.
 type Store struct {
@@ -47,35 +46,37 @@ type Store struct {
 }
 
 // NewStore returns a new Store.
-func NewStore(logger *log.Logger, nodeID, raftAddress, raftDir string, enableSingle bool,
-	rpcAddress, bucketName, cohortRaftAddress, cohortJoinAddress string) *Store {
-
+func NewStore(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSingle bool, rpcAddress string, bucketName, cohortRaftAddress, cohortJoinAddress string) *Store {
 	if nodeID == "" {
 		nodeID = "node-" + common.RandNodeID(common.NodeIDLen)
 	}
+
 	if raftDir == "" {
-		raftDir = fmt.Sprintf("./%s", nodeID)
+		raftDir, _ = os.Hostname()
 	}
+
 	l := logger.WithField("component", "store")
-	l.Infof("Preparing node-%s with persistent directory %s, raftAddress %s", nodeID, raftDir, raftAddress)
-	os.MkdirAll(raftDir, 0700)
+	shardsDir := filepath.Join(common.RaftPVBaseDir, raftDir)
+
+	l.Infof("Preparing node-%s with persistent directory %s, raftAddress %s", nodeID, shardsDir, raftAddress)
+	os.MkdirAll(shardsDir, 0700)
 	if bucketName == "" {
 		bucketName = "bucket-" + nodeID
 	}
-	persistDbConn := newDBConn(filepath.Join(raftDir, nodeID+"-"+SnapshotPersistFile), bucketName, logger)
+	persistDbConn := newDBConn(filepath.Join(shardsDir, SnapshotPersistFile), bucketName, logger)
 
 	s := &Store{
 		ID:                nodeID,
 		RaftAddress:       raftAddress,
-		RaftDir:           raftDir,
 		kv:                common.NewCmap(logger, common.LockContention),
 		log:               l,
 		rpcAddress:        rpcAddress,
 		persistKvDbConn:   persistDbConn,
 		persistBucketName: bucketName,
+		RaftDir: shardsDir,
 	}
 
-	ra, err := common.SetupRaft((*fsm)(s), s.ID, s.RaftAddress, s.RaftDir, enableSingle)
+	ra, err := common.SetupRaft((*fsm)(s), s.ID, s.RaftAddress, shardsDir, enableSingle)
 	if err != nil {
 		l.Fatalf("Unable to setup raft instance for kv store:%s", err)
 	}

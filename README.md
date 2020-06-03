@@ -13,54 +13,32 @@ The distributed transactions across shards is achieved using two-phase commit pr
 
 
 
-## Build Protocol Buffer
+## Build kv container
 ```
-make proto
-```
-
-## Build Program locally
-```
-make build-local
+make build
 ```
 
-## Start the container
+## Bootstrap cluster
+This drops into a client container shell to perform kv CRUDs
 ```
-docker run --rm --name kv -it supriyapremkumar/kv:v0.1 sh
-
-Run all the following container in by opening up as many shells as needed
-docker exec -it kv sh
-
-In order to clean up all the container run
-docker rm -fv $(docker ps -aq)
-
-TODO: Remove this once we have the cluster
-```
-## Start KV Shard-1
-```
-bin/kv -i node-0 -l :11000 -r :12000 
-bin/kv -i node-1 -l :11001 -r :12001 -j :11000 
-bin/kv -i node-2 -l :11002 -r :12002 -j :11000
-```
-
-## Start KV Shard-2
-```
-bin/kv -i node-3 -l :15000 -r :16000 
-bin/kv -i node-4 -l :15001 -r :16001 -j :15000 
-bin/kv -i node-5 -l :15002 -r :16002 -j :15000
+make cluster
+ ######################### Starting Client #########################
+>
+>
+>txn
+Entering transaction status
+>set universe 42
+>set team 4
+>end
+Submitting [method:"set" key:"universe" value:42 method:"set" key:"team" value:4]
+OK
+>get team
+Key=team, Value=4
+>get universe
+Key=universe, Value=42
 ```
 
-## Start Coordinator
-```
-bin/kv -i node-6 -l :17000 -r :18000 -c
-bin/kv -i node-7 -l :17001 -r :18001 -c -j :17000
-bin/kv -i node-8 -l :17002 -r :18002 -c -j :17000
-```
-
-## Start Client
-```
-bin/client -e :17000
-```
-Client commands:
+## Client commands:
 - `get [key]`: get value of a key from RAFT KV store
   - Examples: `get class` or `get "distributed system"`
   - If the `[key]` does not exist, return message `Key=[key] does not exist`
