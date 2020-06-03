@@ -55,8 +55,3 @@ else
   echo "Unpausing $node..."
   docker unpause "$node"
 fi
-
-
-
-
-
