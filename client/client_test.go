@@ -7,7 +7,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/raft-kv-store/common"
@@ -22,13 +21,13 @@ func (c *raftKVClient) appendTestCmds(method, key string, value ...int64) {
 	case common.SET:
 		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
 			Method: method,
-			Key:    key,
-			Value:  value[0],
+			Key:     key,
+			Value:   value[0],
 		})
 	case common.DEL:
 		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
 			Method: method,
-			Key:    key,
+			Key:     key,
 		})
 	}
 }
@@ -48,6 +47,7 @@ func TestClient(t *testing.T) {
 	}
 	assert.Truef(t, cmp.Equal(expectedCmds, c.txnCmds), "Expected %v but got %v", expectedCmds, c.txnCmds)
 
+
 	// set a 5, set a 3, del a => no effect
 	c.txnCmds = &raftpb.RaftCommand{}
 	c.appendTestCmds(common.SET, "a", 5)
@@ -56,6 +56,7 @@ func TestClient(t *testing.T) {
 	c.OptimizeTxnCommands()
 	expectedCmds = &raftpb.RaftCommand{}
 	assert.Truef(t, cmp.Equal(expectedCmds, c.txnCmds), "Expected %v but got %v", expectedCmds, c.txnCmds)
+
 
 	// set a 5, set a 10, del b => set a 10, del b
 	c.txnCmds = &raftpb.RaftCommand{}
@@ -86,6 +87,7 @@ func TestClient(t *testing.T) {
 	}
 	assert.Truef(t, cmp.Equal(expectedCmds, c.txnCmds), "Expected %v but got %v", expectedCmds, c.txnCmds)
 
+
 	// del a, del b, set a 5, set b 6, set b 15, del c => del a, del b, set a 5, set b 15, del c
 	c.txnCmds = &raftpb.RaftCommand{}
 	c.appendTestCmds(common.DEL, "a")
@@ -106,6 +108,7 @@ func TestClient(t *testing.T) {
 	}
 	assert.Truef(t, cmp.Equal(expectedCmds, c.txnCmds), "Expected %v but got %v", expectedCmds, c.txnCmds)
 
+
 	// del a => del a
 	c.txnCmds = &raftpb.RaftCommand{}
 	c.appendTestCmds(common.DEL, "a")
@@ -116,6 +119,7 @@ func TestClient(t *testing.T) {
 		},
 	}
 	assert.Truef(t, cmp.Equal(expectedCmds, c.txnCmds), "Expected %v but got %v", expectedCmds, c.txnCmds)
+
 
 	// set a 5, set a 20, set a 25, set b 30 => set a 25, set b 30
 	c.txnCmds = &raftpb.RaftCommand{}
@@ -133,6 +137,7 @@ func TestClient(t *testing.T) {
 	assert.Truef(t, cmp.Equal(expectedCmds, c.txnCmds), "Expected %v but got %v", expectedCmds, c.txnCmds)
 
 }
+
 
 func TestMultiClientsMultiGet(t *testing.T) {
 	var success int32
@@ -156,6 +161,8 @@ func TestMultiClientsMultiGet(t *testing.T) {
 	fmt.Println(success)
 }
 
+
+
 func TestMultiClientsMultiSet(t *testing.T) {
 	c := NewRaftKVClient(coordAddr)
 	c.Delete("x")
@@ -165,8 +172,8 @@ func TestMultiClientsMultiSet(t *testing.T) {
 		clients = append(clients, NewRaftKVClient(coordAddr))
 		clients[i].txnCmds = &raftpb.RaftCommand{
 			Commands: []*raftpb.Command{
-				{Method: common.SET, Key: "x", Value: int64(i + 1)},
-				{Method: common.SET, Key: "y", Value: int64(-i - 1)},
+				{Method: common.SET, Key: "x", Value: int64(i+1)},
+				{Method: common.SET, Key: "y", Value: int64(-i-1)},
 			},
 			IsTxn: true,
 		}
@@ -183,6 +190,7 @@ func TestMultiClientsMultiSet(t *testing.T) {
 	wg.Wait()
 	log.Println(c.Get("y"))
 }
+
 
 func TestMultiXfer(t *testing.T) {
 	c := NewRaftKVClient(coordAddr)
@@ -203,42 +211,4 @@ func TestMultiXfer(t *testing.T) {
 	}
 	wg.Wait()
 	log.Println(c.Get("y"))
-}
-
-//=== RUN   TestGetLatency
-//1 clients, 0.26, 0.45, 0.64 ms
-//5 clients, 0.27, 0.48, 0.80 ms
-//10 clients, 0.28, 0.60, 0.99 ms
-//20 clients, 0.26, 0.64, 1.10 ms
-//50 clients, 0.28, 0.84, 1.83 ms
-//100 clients, 0.23, 447.72, 1924.32 ms
-//200 clients, 0.34, 865.25, 2011.97 ms
-//--- PASS: TestGetLatency (94.47s)
-
-func TestGetLatency(t *testing.T) {
-	for _, num := range []int{5} {
-		var clients []*raftKVClient
-		for i := 0; i < num; i++ {
-			clients = append(clients, NewRaftKVClient(coordAddr))
-		}
-		var wg sync.WaitGroup
-		for i, c := range clients {
-			wg.Add(1)
-			go func(c *raftKVClient, k int) {
-				defer wg.Done()
-				key := strconv.Itoa(k)
-				expStart := time.Now()
-				for time.Since(expStart) < 5*time.Second {
-					start := time.Now()
-					err := c.Get(key)
-					if err == nil || err.Error() == fmt.Sprintf("Key=%s does not exist", key) {
-						fmt.Println(int(time.Since(start) / time.Microsecond))
-					} else {
-						fmt.Println(err)
-					}
-				}
-			}(c, i)
-		}
-		wg.Wait()
-	}
 }
