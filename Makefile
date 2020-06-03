@@ -15,7 +15,7 @@ proto:
 
 cluster: cluster-clean
 	@docker network create raft-net  --subnet 10.10.10.0/24 || true
-	docker run -d -e BOOTSTRAP_LEADER=yes --rm --net raft-net --hostname node0 --name node0 supriyapremkumar/kv:v0.1
+	docker run -d -e BOOTSTRAP_LEADER=yes --rm -p 17000:17000 --net raft-net --hostname node0 --name node0 supriyapremkumar/kv:v0.1
 	docker run -d -e BOOTSTRAP_FOLLOWER=yes --rm --net raft-net --hostname node1 --name node1 supriyapremkumar/kv:v0.1
 	docker run -d -e BOOTSTRAP_FOLLOWER=yes --rm --net raft-net --hostname node2 --name node2 supriyapremkumar/kv:v0.1
 	@printf "\n\n ######################### Starting Client ######################### \n\n"
