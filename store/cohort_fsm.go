@@ -71,7 +71,7 @@ func (f *cohortfsm) Restore(rc io.ReadCloser) error {
 		f.store.log.Fatal(err)
 	}
 
-	var o *raftpb.OpsMap
+	o := &raftpb.OpsMap{}
 	if err := proto.Unmarshal(b, o); err != nil {
 		return err
 	}
