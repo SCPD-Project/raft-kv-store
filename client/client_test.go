@@ -14,6 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const coordAddr = "127.0.0.1:17000"
+
 func (c *raftKVClient) appendTestCmds(method, key string, value ...int64) {
 	switch method {
 	case common.SET:
@@ -139,11 +141,9 @@ func TestClient(t *testing.T) {
 
 func TestMultiClientsMultiGet(t *testing.T) {
 	var success int32
-	//c := NewRaftKVClient(":17000")
-	//c.Set("x", 5)
 	var clients []*raftKVClient
 	for i := 0; i < 300; i++ {
-		clients = append(clients, NewRaftKVClient(":17000"))
+		clients = append(clients, NewRaftKVClient(coordAddr))
 	}
 	var wg sync.WaitGroup
 	for i, c := range clients {
@@ -164,16 +164,16 @@ func TestMultiClientsMultiGet(t *testing.T) {
 
 
 func TestMultiClientsMultiSet(t *testing.T) {
-	c := NewRaftKVClient(":17000")
-	c.Delete("test3")
-	c.Delete("test4")
+	c := NewRaftKVClient(coordAddr)
+	c.Delete("x")
+	c.Delete("y")
 	var clients []*raftKVClient
-	for i := 0; i < 15; i++ {
-		clients = append(clients, NewRaftKVClient(":17000"))
+	for i := 0; i < 5; i++ {
+		clients = append(clients, NewRaftKVClient(coordAddr))
 		clients[i].txnCmds = &raftpb.RaftCommand{
 			Commands: []*raftpb.Command{
-				{Method: common.SET, Key: "test3", Value: int64(i)},
-				{Method: common.SET, Key: "test4", Value: int64(-i)},
+				{Method: common.SET, Key: "x", Value: int64(i+1)},
+				{Method: common.SET, Key: "y", Value: int64(-i-1)},
 			},
 			IsTxn: true,
 		}
@@ -184,40 +184,31 @@ func TestMultiClientsMultiSet(t *testing.T) {
 		go func(c *raftKVClient) {
 			defer wg.Done()
 			_, err := c.Transaction()
-			//err := c.TransferTransaction([]string{common.TRANSFER, "test3", "test4", "1"})
 			fmt.Println(err)
 		}(c)
 	}
 	wg.Wait()
-	log.Println(c.Get("test4"))
+	log.Println(c.Get("y"))
 }
 
 
-func TestMultiClients(t *testing.T) {
-	c := NewRaftKVClient(":17000")
-	c.Set("test3", 1000)
-	c.Set("test4", 0)
+func TestMultiXfer(t *testing.T) {
+	c := NewRaftKVClient(coordAddr)
+	c.Set("x", 1000)
+	c.Set("y", 0)
 	var clients []*raftKVClient
-	for i := 0; i < 100; i++ {
-		clients = append(clients, NewRaftKVClient(":17000"))
-		clients[i].txnCmds = &raftpb.RaftCommand{
-			Commands: []*raftpb.Command{
-				{Method: common.SET, Key: "test3", Value: int64(i)},
-				{Method: common.SET, Key: "test4", Value: int64(-i)},
-			},
-			IsTxn: true,
-		}
+	for i := 0; i < 50; i++ {
+		clients = append(clients, NewRaftKVClient(coordAddr))
 	}
 	var wg sync.WaitGroup
 	for _, c := range clients {
 		wg.Add(1)
 		go func(c *raftKVClient) {
 			defer wg.Done()
-			_, err := c.Transaction()
-			//err := c.TransferTransaction([]string{common.TRANSFER, "test3", "test4", "1"})
+			err := c.TransferTransaction([]string{common.TRANSFER, "x", "y", "1"})
 			fmt.Println(err)
 		}(c)
 	}
 	wg.Wait()
-	log.Println(c.Get("test4"))
+	log.Println(c.Get("y"))
 }
