@@ -22,9 +22,9 @@ cluster: cluster-clean
 	@printf "\n\n ######################### Starting Client ######################### \n\n"
 	@docker run -it --net raft-net --hostname client --name client supriyapremkumar/kv:v0.1 client -e node0:17000
 
-cluster-clean:
+cluster-clean: clean
 	docker rm -fv node0 node1 node2 client || true
 	
 clean:
-	rm -rf node-*
+	rm -rf node*
 	rm -rf cohort*
