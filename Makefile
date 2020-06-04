@@ -7,6 +7,11 @@ build-local:
 	CGO_ENABLED=0 GOARCH=amd64 go build -ldflags "-X main.GitCommit=$(git rev-parse --short HEAD)" -o bin/kv
 	CGO_ENABLED=0 GOARCH=amd64 go build -ldflags "-X main.GitCommit=$(git rev-parse --short HEAD)" -o bin/client client/cmd/main.go
 
+
+performance-test:
+	env GOOS=linux GOARCH=amd64 go build -o metric/bin/performance metric/performance.go
+	docker exec -it client metric/bin/performance -c
+
 build: build-local
 	docker build -t supriyapremkumar/kv:${BUILD_VERSION} .
 
@@ -20,7 +25,7 @@ cluster: cluster-clean
 	docker run -d -e BOOTSTRAP_FOLLOWER=yes -p 17001:17001 -v ${PWD}/node1:/pv/ --rm --net raft-net --hostname node1 --name node1 supriyapremkumar/kv:v0.1
 	docker run -d -e BOOTSTRAP_FOLLOWER=yes -p 17002:17002 -v ${PWD}/node2:/pv/ --rm --net raft-net --hostname node2 --name node2 supriyapremkumar/kv:v0.1
 	@printf "\n\n ######################### Starting Client ######################### \n\n"
-	@docker run -it --net raft-net --hostname client --name client supriyapremkumar/kv:v0.1 client -e node0:17000
+	@docker run -it -v ${PWD}/metric:/metric/ --net raft-net --hostname client --name client supriyapremkumar/kv:v0.1 client -e node0:17000
 
 cluster-clean: clean
 	docker rm -fv node0 node1 node2 client || true

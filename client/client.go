@@ -51,7 +51,7 @@ func addURLScheme(s string) string {
 	return s
 }
 
-type raftKVClient struct {
+type RaftKVClient struct {
 	client     *http.Client
 	serverAddr string
 	// TODO: Add stop API to avoid exposing Terminate channel
@@ -61,8 +61,8 @@ type raftKVClient struct {
 	txnCmds   *raftpb.RaftCommand
 }
 
-func NewRaftKVClient(serverAddr string) *raftKVClient {
-	c := &raftKVClient{
+func NewRaftKVClient(serverAddr string) *RaftKVClient {
+	c := &RaftKVClient{
 		client:     &http.Client{Timeout: 5 * time.Second},
 		serverAddr: addURLScheme(serverAddr),
 		Terminate:  make(chan os.Signal, 1),
@@ -72,11 +72,11 @@ func NewRaftKVClient(serverAddr string) *raftKVClient {
 	return c
 }
 
-func (c *raftKVClient) setServerAddr(newAddr string) {
+func (c *RaftKVClient) setServerAddr(newAddr string) {
 	c.serverAddr = addURLScheme(newAddr)
 }
 
-func (c *raftKVClient) readString() []string {
+func (c *RaftKVClient) readString() []string {
 	var cmdArr []string
 	fmt.Print(">")
 	cmdStr, err := c.reader.ReadString('\n')
@@ -92,14 +92,14 @@ func (c *raftKVClient) readString() []string {
 	return cmdArr
 }
 
-func (c *raftKVClient) validCmd2(cmdArr []string) error {
+func (c *RaftKVClient) validCmd2(cmdArr []string) error {
 	if len(cmdArr) != 2 {
 		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key]", cmdArr[0])
 	}
 	return nil
 }
 
-func (c *raftKVClient) validCmd3(cmdArr []string) error {
+func (c *RaftKVClient) validCmd3(cmdArr []string) error {
 	if len(cmdArr) != 3 {
 		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s [key] [value]", cmdArr[0])
 	}
@@ -109,7 +109,7 @@ func (c *raftKVClient) validCmd3(cmdArr []string) error {
 	return nil
 }
 
-func (c *raftKVClient) validTxn(cmdArr []string) error {
+func (c *RaftKVClient) validTxn(cmdArr []string) error {
 	if c.inTxn {
 		return errors.New("Already in transaction")
 	}
@@ -119,7 +119,7 @@ func (c *raftKVClient) validTxn(cmdArr []string) error {
 	return nil
 }
 
-func (c *raftKVClient) validEndTxn(cmdArr []string) error {
+func (c *RaftKVClient) validEndTxn(cmdArr []string) error {
 	if !c.inTxn {
 		return errors.New("Not in transaction")
 	}
@@ -129,7 +129,7 @@ func (c *raftKVClient) validEndTxn(cmdArr []string) error {
 	return nil
 }
 
-func (c *raftKVClient) validExit(cmdArr []string) error {
+func (c *RaftKVClient) validExit(cmdArr []string) error {
 	if len(cmdArr) != 1 {
 		return errors.New("Invalid exit command. Correct syntax: exit")
 	}
@@ -138,7 +138,7 @@ func (c *raftKVClient) validExit(cmdArr []string) error {
 
 // Simpler version of 'transfer' command, eg., Issuing `transfer x y 10` is translated
 // to `transfer 10 from x to y`
-func (c *raftKVClient) validTxnTransfer(cmdArr []string) error {
+func (c *RaftKVClient) validTxnTransfer(cmdArr []string) error {
 	if len(cmdArr) != 4 {
 		return fmt.Errorf("invalid %[1]s command. Correct syntax: %[1]s [fromKey] [toKey] "+
 			"[amount to be transferred]", cmdArr[0])
@@ -151,7 +151,7 @@ func (c *raftKVClient) validTxnTransfer(cmdArr []string) error {
 	return nil
 }
 
-func (c *raftKVClient) validCmd(cmdArr []string) error {
+func (c *RaftKVClient) validCmd(cmdArr []string) error {
 	if len(cmdArr) == 0 {
 		return errors.New("")
 	}
@@ -173,7 +173,7 @@ func (c *raftKVClient) validCmd(cmdArr []string) error {
 	}
 }
 
-func (c *raftKVClient) TransactionRun(cmdArr []string) {
+func (c *RaftKVClient) TransactionRun(cmdArr []string) {
 	switch cmdArr[0] {
 	case common.TXN:
 		c.inTxn = true
@@ -204,7 +204,7 @@ func (c *raftKVClient) TransactionRun(cmdArr []string) {
 	}
 }
 
-func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
+func (c *RaftKVClient) TransferTransaction(cmdArr []string) error {
 	fromKey := cmdArr[1]
 	toKey := cmdArr[2]
 	if fromKey == toKey {
@@ -237,7 +237,7 @@ func (c *raftKVClient) TransferTransaction(cmdArr []string) error {
 	return errors.New("Retries exhausted, aborting txn")
 }
 
-func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int64) error {
+func (c *RaftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int64) error {
 
 	var fromValue int64
 	var toValue int64
@@ -301,7 +301,7 @@ func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int
 	return nil
 }
 
-func (c *raftKVClient) Run() {
+func (c *RaftKVClient) Run() {
 	for {
 		cmdArr := c.readString()
 		if err := c.validCmd(cmdArr); err != nil {
@@ -345,7 +345,7 @@ func (c *raftKVClient) Run() {
 	}
 }
 
-func (c *raftKVClient) parseServerAddr(key string) (string, error) {
+func (c *RaftKVClient) parseServerAddr(key string) (string, error) {
 	u, err := url.Parse(c.serverAddr)
 	if err != nil {
 		return "", err
@@ -354,7 +354,7 @@ func (c *raftKVClient) parseServerAddr(key string) (string, error) {
 	return u.String(), nil
 }
 
-func (c *raftKVClient) newRequest(method, key string, data []byte) (*http.Response, error) {
+func (c *RaftKVClient) newRequest(method, key string, data []byte) (*http.Response, error) {
 	url, err := c.parseServerAddr(key)
 	if err != nil {
 		return nil, err
@@ -370,7 +370,7 @@ func (c *raftKVClient) newRequest(method, key string, data []byte) (*http.Respon
 	return resp, nil
 }
 
-func (c *raftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
+func (c *RaftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
 	u, err := url.Parse(c.serverAddr)
 	if err != nil {
 		return nil, err
@@ -387,7 +387,7 @@ func (c *raftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
 	return resp, nil
 }
 
-func (c *raftKVClient) Get(key string) error {
+func (c *RaftKVClient) Get(key string) error {
 	resp, err := c.newRequest(http.MethodGet, key, nil)
 	if err != nil {
 		return err
@@ -404,7 +404,7 @@ func (c *raftKVClient) Get(key string) error {
 	return errors.New(string(body))
 }
 
-func (c *raftKVClient) Set(key string, value int64) error {
+func (c *RaftKVClient) Set(key string, value int64) error {
 	var reqBody []byte
 	var err error
 	if reqBody, err = proto.Marshal(&raftpb.Command{
@@ -430,7 +430,7 @@ func (c *raftKVClient) Set(key string, value int64) error {
 	return errors.New(string(body))
 }
 
-func (c *raftKVClient) Delete(key string) error {
+func (c *RaftKVClient) Delete(key string) error {
 	resp, err := c.newRequest(http.MethodDelete, key, nil)
 	if err != nil {
 		return err
@@ -447,7 +447,7 @@ func (c *raftKVClient) Delete(key string) error {
 	return errors.New(string(body))
 }
 
-func (c *raftKVClient) OptimizeTxnCommands() {
+func (c *RaftKVClient) OptimizeTxnCommands() {
 	lastSetMap := make(map[string]int)
 	txnSkips := make([]bool, len(c.txnCmds.Commands))
 	/* lastSetMap contains only valid keys (no `del` cmd followed by `set` in input cmd seq).
@@ -483,7 +483,7 @@ func (c *raftKVClient) OptimizeTxnCommands() {
 	c.txnCmds.Commands = newCmds
 }
 
-func (c *raftKVClient) AddTransaction(cmdArr []string ) error {
+func (c *RaftKVClient) AddTransaction(cmdArr []string ) error {
 	amount, _ := parseInt64(cmdArr[2])
 	if amount == 0 {
 		return errors.New("Non-zero value expected")
@@ -508,7 +508,7 @@ func (c *raftKVClient) AddTransaction(cmdArr []string ) error {
 	return errors.New("Retries exhausted, aborting")
 }
 
-func (c *raftKVClient) attemptAdd(key string, amount int64) error {
+func (c *RaftKVClient) attemptAdd(key string, amount int64) error {
 	c.txnCmds = &raftpb.RaftCommand{
 		Commands: []*raftpb.Command{
 			{Method: common.GET, Key: key},
@@ -543,7 +543,7 @@ func (c *raftKVClient) attemptAdd(key string, amount int64) error {
 	return nil
 }
 
-func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
+func (c *RaftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 	oldLen := len(c.txnCmds.Commands)
 	c.OptimizeTxnCommands()
 	newLen := len(c.txnCmds.Commands)
@@ -586,7 +586,7 @@ func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 	return nil, errors.New(string(body))
 }
 
-func (c *raftKVClient) txnToSingleCmd() error {
+func (c *RaftKVClient) txnToSingleCmd() error {
 	cmd := c.txnCmds.Commands[0]
 	switch cmd.Method {
 	case common.DEL:
