@@ -3,6 +3,7 @@ package coordinator
 import (
 	"fmt"
 	"net/rpc"
+	"time"
 
 	"github.com/hashicorp/raft"
 	"github.com/raft-kv-store/common"
@@ -118,6 +119,7 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 	c.log.Infof("Processing Transaction")
 	txid := xid.New().String()
 	gt := c.newGlobalTransaction(txid, cmds)
+	gt.StartTime = time.Now().UnixNano()
 	readOnly := isReadOnly(gt.Cmds.Commands)
 	numShards := len(gt.ShardToCommands)
 	resultCmds := &raftpb.RaftCommand{}
@@ -166,13 +168,26 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 		}
 
 		var err error
-		for _, shardops := range gt.ShardToCommands {
+		var abortMessages int
+		for id, shardops := range gt.ShardToCommands {
+			gt.ShardToCommands[id].Phase = common.Abort
 			shardops.Phase = common.Abort
 			// best effort
 			_, err = c.SendMessageToShard(shardops)
 			if err != nil {
 				c.log.Infof("[txid %s] failed at %v with %s", txid, shardops, err.Error())
+			} else {
+				abortMessages++
 			}
+		}
+
+		if abortMessages == numShards {
+			gt.Phase = common.Aborted
+			// replicate via raft
+			if err := c.Replicate(txid, common.SET, gt); err != nil {
+				c.log.Infof("[txid: %s] failed to set Aborted state: %s", txid, err)
+			}
+			c.log.Infof("[txid: %s] Aborted Successfully", txid)
 		}
 		return nil, err
 	}
@@ -181,19 +196,23 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 
 	// c.log the prepared phase and replicate it
 	gt.Phase = common.Prepared
+	for id := range gt.ShardToCommands {
+		gt.ShardToCommands[id].Phase = common.Prepared
+	}
 	if err := c.Replicate(txid, common.SET, gt); err != nil {
 		c.log.Errorf("[txid: %s] failed to set Prepared state: %s", txid, err)
 		return nil, fmt.Errorf("unable to complete transaction: %s", err)
 	}
 
-	// TODO(imp):if the above replication fails via raft,
-	// this usually means majority of nodes in the coordinator
-	// cluster are faulty (partition or down). In that case,
-	// retry on error. This will be done via clean up goroutine
-
+	if c.failmode == FailCommit {
+		c.log.Infof("Simulating node failure after prepared phase, kill the node")
+		time.Sleep(5 * time.Minute)
+		return nil, fmt.Errorf("transaction unsuccesfull")
+	}
+	//
 	// Comment: In general, there is nothing much that can be
 	// done on raft failures. A transaction recovery go-routine
-	// that runs periodically (TODO) and does the following
+	// that runs periodically and does the following
 	// 1. if transaction is not in commit state (meaning commit message not sent
 	// to shards), after t seconds (some constant), send an abort and release locks
 	// 2. if transaction is in commit state, keep trying to send commit and complete
@@ -201,14 +220,15 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 
 	// Commit
 	var commitResponses int
-	for _, shardOps := range gt.ShardToCommands {
+	for id, shardOps := range gt.ShardToCommands {
 		// Replicate via Raft
-		gt.Phase = common.Commit
-		shardOps.Phase = common.Commit
 
+		gt.ShardToCommands[id].Phase = common.Commit
+		shardOps.Phase = common.Commit
+		gt.Phase = common.Commit
 		if err := c.Replicate(txid, common.SET, gt); err != nil {
 			c.log.Errorf("[txid: %s] failed to set commit state: %s", txid, err)
-			return nil, fmt.Errorf("unable to complete transaction: %s", err)
+			return nil, fmt.Errorf("failed to replicate state: %s", err)
 		}
 
 		if _, err := c.SendMessageToShard(shardOps); err == nil {
@@ -216,15 +236,16 @@ func (c *Coordinator) Transaction(cmds *raftpb.RaftCommand) (*raftpb.RaftCommand
 		}
 	}
 
-	// c.log the commit phase and replicate it
-	// TODO (not important): this can be garbage collected in a separate go-routine, once all acks have
-	// been recieved
-	gt.Phase = common.Committed
-	if err := c.Replicate(txid, common.SET, gt); err != nil {
-		c.log.Infof("[txid: %s] failed to set commited state: %s", txid, err)
-		// Note: there is no need to return with an error here, At this point, the cohorts have
-		// already got the commit message. From the client perspective, this transaction
-		// is successfull.
+	// If all commits are not received, it will tried again
+	// in recovery routine
+	if commitResponses == numShards {
+		gt.Phase = common.Committed
+		if err := c.Replicate(txid, common.SET, gt); err != nil {
+			c.log.Infof("[txid: %s] failed to set commited state: %s", txid, err)
+			// Note: there is no need to return with an error here, At this point, the cohorts have
+			// already got the commit message. From the client perspective, this transaction
+			// is successfull.
+		}
 	}
 
 	// wait for all acks since client should complete replication as
