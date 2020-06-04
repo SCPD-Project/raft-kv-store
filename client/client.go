@@ -26,13 +26,20 @@ var (
 	CmdRegex = regexp.MustCompile(`[^\s"']+|"([^"]*)"|'([^']*)\n`)
 )
 
-const maxTransferRetries = 5
+const maxTransferRetries = 10
 
 // keep it simple
-var staticCoordMapping = map[string]string {
-	"node0:18000": "http://node0:17000",
-	"node1:18000": "http://node1:17000",
-	"node2:18000": "http://node2:17000",
+var staticCoordServers = []string {
+	"http://node0:17000",
+	"http://node1:17000",
+	"http://node2:17000",
+}
+
+// TODO: temporary, replace with hostname after RPC is fixed to return hostname
+var staticIPLeaderMapping = map[string]string {
+	"10.10.10.2:18000": "http://node0:17000",
+	"10.10.10.3:18000": "http://node1:17000",
+	"10.10.10.4:18000": "http://node2:17000",
 }
 
 type insufficientFundsError struct {
@@ -361,67 +368,83 @@ func (c *raftKVClient) parseServerAddr(key string) (string, error) {
 	return u.String(), nil
 }
 
-func (c *raftKVClient) findNextAvailableServer() {
-	// simple round robin
-	unavailableServersMap := make(map[string]bool, len(staticCoordMapping))
-	for key, value := range staticCoordMapping {
-		if value == c.serverAddr {
-			unavailableServersMap[key] = true
-		} else {
-			unavailableServersMap[key] = false
+func (c *raftKVClient) newRequest(method, key string, data []byte, retry bool) (*http.Response, error) {
+	var err error
+	var url string
+	var req *http.Request
+	var resp *http.Response
+
+	url, err = c.parseServerAddr(key)
+	if err != nil {
+		return nil, err
+	}
+	req, err = http.NewRequest(method, url, bytes.NewBuffer(data))
+	if err != nil {
+		return nil, err
+	}
+	resp, err = c.client.Do(req)
+	if err != nil && retry {
+		skipReqFailedServers := make(map[string]bool)
+		skipReqFailedServers[c.serverAddr] = true
+		for _, value := range staticCoordServers {
+			if skipReqFailedServers[value] { continue }
+			c.serverAddr = value
+			skipReqFailedServers[c.serverAddr] = true
+			resp, err = c.client.Do(req)
+			if err != nil {
+				fmt.Println("retying with alternate servers", c.serverAddr)
+				continue
+			}
+			return resp, nil
 		}
+	} else {
+		return resp, nil
 	}
 
-	for key, value := range unavailableServersMap {
-		if !value {
-			c.serverAddr = staticCoordMapping[key]
-			break
-		}
-	}
-}
-
-func (c *raftKVClient) newRequest(method, key string, data []byte) (*http.Response, error) {
-	url, err := c.parseServerAddr(key)
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(data))
-	if err != nil {
-		return nil, err
-	}
-	fmt.Println(" failed in lookup phase 1: ")
-	resp, err := c.client.Do(req)
-	// network issues, retry all coordinators in static map
-	if err != nil {
-		fmt.Println(" failed in lookup phase 2: ", err)
-		c.findNextAvailableServer()
-		return nil, err
-	}
-
-	return resp, nil
+	return nil, err
 }
 
 func (c *raftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
-	u, err := url.Parse(c.serverAddr)
+	// Txfer will retry as well
+	var err error
+	var u *url.URL
+	var req *http.Request
+	var resp *http.Response
+
+	u, err = url.Parse(c.serverAddr)
 	if err != nil {
 		return nil, err
 	}
 	fmt.Println()
 	u.Path = path.Join(u.Path, "transaction")
-	req, err := http.NewRequest(http.MethodPost, u.String(), bytes.NewBuffer(data))
+	req, err = http.NewRequest(http.MethodPost, u.String(), bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.client.Do(req)
+	resp, err = c.client.Do(req)
 	if err != nil {
-		c.findNextAvailableServer()
-		return nil, err
+		skipReqFailedServers := make(map[string]bool)
+		skipReqFailedServers[c.serverAddr] = true
+		for _, value := range staticCoordServers {
+			if skipReqFailedServers[value] { continue }
+			fmt.Printf("err:%s, retying with alternate server:%s\n", err, c.serverAddr)
+			c.serverAddr = value
+			skipReqFailedServers[c.serverAddr] = true
+			resp, err = c.client.Do(req)
+			if err != nil {
+				continue
+			}
+			return resp, nil
+		}
+	} else {
+		return resp, nil
 	}
-	return resp, nil
+
+	return nil, err
 }
 
 func (c *raftKVClient) Get(key string) error {
-	resp, err := c.newRequest(http.MethodGet, key, nil)
+	resp, err := c.newRequest(http.MethodGet, key, nil, true)
 	if err != nil {
 		return err
 	}
@@ -433,6 +456,22 @@ func (c *raftKVClient) Get(key string) error {
 	if resp.StatusCode == http.StatusOK {
 		color.HiGreen(string(body))
 		return nil
+	} else if resp.StatusCode == http.StatusMisdirectedRequest {
+		// Update leader so this request can be retried at the leader
+		c.serverAddr = staticIPLeaderMapping[string(body)]
+		fmt.Printf("redirecting request to: %s with body: %s\n", c.serverAddr, string(body))
+		retryRsp, err := c.newRequest(http.MethodGet, key, nil, false)
+		if err != nil {
+			return err
+		}
+		defer retryRsp.Body.Close()
+		retryBody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return errors.New(string(retryBody))
+		} else if retryRsp.StatusCode == http.StatusOK {
+			color.HiGreen("OK")
+			return nil
+		}
 	}
 	return errors.New(string(body))
 }
@@ -447,7 +486,7 @@ func (c *raftKVClient) Set(key string, value int64) error {
 	}); err != nil {
 		return err
 	}
-	resp, err := c.newRequest(http.MethodPost, key, reqBody)
+	resp, err := c.newRequest(http.MethodPost, key, reqBody, true)
 	if err != nil {
 		return err
 	}
@@ -456,15 +495,32 @@ func (c *raftKVClient) Set(key string, value int64) error {
 	if err != nil {
 		return err
 	}
+
 	if resp.StatusCode == http.StatusOK {
 		color.HiGreen("OK")
 		return nil
+	} else if resp.StatusCode == http.StatusMisdirectedRequest {
+		fmt.Println("misdirectedRequest")
+		// Update leader so this request can be retried at the leader
+		c.serverAddr = staticIPLeaderMapping[string(body)]
+		retryRsp, err := c.newRequest(http.MethodPost, key, reqBody, false)
+		if err != nil {
+			return err
+		}
+		defer retryRsp.Body.Close()
+		retryBody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return errors.New(string(retryBody))
+		} else if retryRsp.StatusCode == http.StatusOK {
+			color.HiGreen("OK")
+			return nil
+		}
 	}
 	return errors.New(string(body))
 }
 
 func (c *raftKVClient) Delete(key string) error {
-	resp, err := c.newRequest(http.MethodDelete, key, nil)
+	resp, err := c.newRequest(http.MethodDelete, key, nil, true)
 	if err != nil {
 		return err
 	}
@@ -476,6 +532,10 @@ func (c *raftKVClient) Delete(key string) error {
 	if resp.StatusCode == http.StatusOK {
 		color.HiGreen("OK")
 		return nil
+	} else if resp.StatusCode == http.StatusMisdirectedRequest {
+		// Update leader info so next request can be routed to the leader
+		c.serverAddr = staticIPLeaderMapping[string(body)]
+		fmt.Println(c.serverAddr)
 	}
 	return errors.New(string(body))
 }
@@ -616,7 +676,9 @@ func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 		color.HiGreen("OK")
 		return txnCmdRsp, nil
 	} else if resp.StatusCode == http.StatusMisdirectedRequest {
-		
+		// Update leader info so next request can be routed to the leader
+		c.serverAddr = staticIPLeaderMapping[string(body)]
+		fmt.Println(c.serverAddr)
 	}
 	return nil, errors.New(string(body))
 }
