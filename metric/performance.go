@@ -3,26 +3,28 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
-	"github.com/raft-kv-store/client"
-	flag "github.com/spf13/pflag"
 	"log"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/raft-kv-store/client"
+	flag "github.com/spf13/pflag"
 )
 
 const (
-	localCoordAddr = "127.0.0.1:17000"
+	// FIXME: this won't work after client finding leader PR merged when running locally
+	localCoordAddr  = "127.0.0.1:17000"
 	dockerCoordAddr = "node0:17000"
+	requestDuration = 5 * time.Second
 )
 
 var (
-	clientsToTest = []int{1, 2, 5, 10, 20, 50, 100, 200}
-	coordAddr string
-	inContainer bool
+	clientsToTest = []int{1, 2, 5, 10, 20, 50, 100, 150}
+	coordAddr     string
+	inContainer   bool
 )
-
 
 func init() {
 	flag.BoolVarP(&inContainer, "container", "c", false, "Run test in container")
@@ -62,7 +64,7 @@ func TestGetLatency() {
 				defer wg.Done()
 				key := strconv.Itoa(k)
 				expStart := time.Now()
-				for time.Since(expStart) < 5*time.Second {
+				for time.Since(expStart) < requestDuration {
 					start := time.Now()
 					err := c.Get(key)
 					if err == nil || err.Error() == fmt.Sprintf("Key=%s does not exist", key) {
@@ -81,10 +83,10 @@ func TestGetLatency() {
 		}
 		err := writer.Write(latencyRow)
 		checkError("Cannot write to file", err)
-		if idx != len(clientsToTest) - 1 {
-			t := numClient / 5
+		if idx != len(clientsToTest)-1 {
+			t := 30
+			fmt.Printf("Waiting %d sec to cool down...\n", t)
 			time.Sleep(time.Duration(t) * time.Second)
-			fmt.Printf("Waiting %d sec to cool down", t)
 		} else {
 			fmt.Println("Finished")
 		}
