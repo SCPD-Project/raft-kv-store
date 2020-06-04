@@ -32,9 +32,7 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 	case common.SET:
 		f.m.Lock()
 		defer f.m.Unlock()
-		if f.txMap != nil {
-			f.txMap[command.Key] = command.Gt
-		}
+		f.txMap[command.Key] = command.Gt
 
 	case common.DEL:
 		f.m.Lock()

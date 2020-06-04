@@ -47,8 +47,8 @@ func init() {
 	flag.StringVarP(&joinHTTPAddress, "join", "j", "", "Set joining HTTP address, if any")
 	flag.StringVarP(&nodeID, "id", "i", "", "Node ID, randomly generated if not set")
 	flag.StringVarP(&raftDir, "dir", "d", "", "Raft directory, ./$(nodeID) if not set")
-	flag.IntVarP(&common.SnapshotInterval, "snapshotinterval", "", 30,
-		"Snapshot interval in seconds, 30 seconds if not set")
+	flag.IntVarP(&common.SnapshotInterval, "snapshotinterval", "", 180,
+		"Snapshot interval in seconds, 180 seconds if not set")
 	flag.IntVarP(&common.SnapshotThreshold, "snapshotthreshold", "", 5,
 		"snapshot threshold of log indices, 5 if not set")
 	flag.StringVarP(&bucketName, "bucketName/shard", "b", "", "Bucket name, randomly"+
