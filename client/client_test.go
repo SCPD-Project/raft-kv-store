@@ -7,7 +7,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/raft-kv-store/common"
@@ -17,7 +16,7 @@ import (
 
 const coordAddr = "127.0.0.1:17000"
 
-func (c *raftKVClient) appendTestCmds(method, key string, value ...int64) {
+func (c *RaftKVClient) appendTestCmds(method, key string, value ...int64) {
 	switch method {
 	case common.SET:
 		c.txnCmds.Commands = append(c.txnCmds.Commands, &raftpb.Command{
@@ -136,14 +135,14 @@ func TestClient(t *testing.T) {
 
 func TestMultiClientsMultiGet(t *testing.T) {
 	var success int32
-	var clients []*raftKVClient
+	var clients []*RaftKVClient
 	for i := 0; i < 300; i++ {
 		clients = append(clients, NewRaftKVClient(coordAddr))
 	}
 	var wg sync.WaitGroup
 	for i, c := range clients {
 		wg.Add(1)
-		go func(c *raftKVClient) {
+		go func(c *RaftKVClient) {
 			defer wg.Done()
 			if err := c.Get(strconv.Itoa(i)); err == nil || err.Error() == fmt.Sprintf("Key=%d does not exist", i) {
 				atomic.AddInt32(&success, 1)
@@ -160,7 +159,7 @@ func TestMultiClientsMultiSet(t *testing.T) {
 	c := NewRaftKVClient(coordAddr)
 	c.Delete("x")
 	c.Delete("y")
-	var clients []*raftKVClient
+	var clients []*RaftKVClient
 	for i := 0; i < 5; i++ {
 		clients = append(clients, NewRaftKVClient(coordAddr))
 		clients[i].txnCmds = &raftpb.RaftCommand{
@@ -174,7 +173,7 @@ func TestMultiClientsMultiSet(t *testing.T) {
 	var wg sync.WaitGroup
 	for _, c := range clients {
 		wg.Add(1)
-		go func(c *raftKVClient) {
+		go func(c *RaftKVClient) {
 			defer wg.Done()
 			_, err := c.Transaction()
 			fmt.Println(err)
@@ -188,14 +187,14 @@ func TestMultiXfer(t *testing.T) {
 	c := NewRaftKVClient(coordAddr)
 	c.Set("x", 1000)
 	c.Set("y", 0)
-	var clients []*raftKVClient
+	var clients []*RaftKVClient
 	for i := 0; i < 50; i++ {
 		clients = append(clients, NewRaftKVClient(coordAddr))
 	}
 	var wg sync.WaitGroup
 	for _, c := range clients {
 		wg.Add(1)
-		go func(c *raftKVClient) {
+		go func(c *RaftKVClient) {
 			defer wg.Done()
 			err := c.TransferTransaction([]string{common.TRANSFER, "x", "y", "1"})
 			fmt.Println(err)
@@ -203,42 +202,4 @@ func TestMultiXfer(t *testing.T) {
 	}
 	wg.Wait()
 	log.Println(c.Get("y"))
-}
-
-//=== RUN   TestGetLatency
-//1 clients, 0.26, 0.45, 0.64 ms
-//5 clients, 0.27, 0.48, 0.80 ms
-//10 clients, 0.28, 0.60, 0.99 ms
-//20 clients, 0.26, 0.64, 1.10 ms
-//50 clients, 0.28, 0.84, 1.83 ms
-//100 clients, 0.23, 447.72, 1924.32 ms
-//200 clients, 0.34, 865.25, 2011.97 ms
-//--- PASS: TestGetLatency (94.47s)
-
-func TestGetLatency(t *testing.T) {
-	for _, num := range []int{5} {
-		var clients []*raftKVClient
-		for i := 0; i < num; i++ {
-			clients = append(clients, NewRaftKVClient(coordAddr))
-		}
-		var wg sync.WaitGroup
-		for i, c := range clients {
-			wg.Add(1)
-			go func(c *raftKVClient, k int) {
-				defer wg.Done()
-				key := strconv.Itoa(k)
-				expStart := time.Now()
-				for time.Since(expStart) < 5*time.Second {
-					start := time.Now()
-					err := c.Get(key)
-					if err == nil || err.Error() == fmt.Sprintf("Key=%s does not exist", key) {
-						fmt.Println(int(time.Since(start) / time.Microsecond))
-					} else {
-						fmt.Println(err)
-					}
-				}
-			}(c, i)
-		}
-		wg.Wait()
-	}
 }
