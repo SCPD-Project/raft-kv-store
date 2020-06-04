@@ -9,8 +9,8 @@ build-local:
 
 
 performance-test:
-	env GOOS=linux GOARCH=amd64 go build -o metric/performance metric/performance.go
-	docker exec -it client metric/performance -c
+	env GOOS=linux GOARCH=amd64 go build -o metric/bin/performance metric/performance.go
+	docker exec -it client metric/bin/performance -c
 
 build: build-local
 	docker build -t supriyapremkumar/kv:${BUILD_VERSION} .

@@ -39,4 +39,5 @@ bin/
 *.csv
 venv/
 metric/.ipynb_checkpoints/
+*/bin/
 
