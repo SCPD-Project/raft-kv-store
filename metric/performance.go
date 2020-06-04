@@ -15,11 +15,10 @@ import (
 const (
 	localCoordAddr = "127.0.0.1:17000"
 	dockerCoordAddr = "node0:17000"
-
 )
 
 var (
-	clientsToTest = []int{1, 2, 5, 10, 20, 50, 100, 150}
+	clientsToTest = []int{1, 2, 5, 10, 20, 50, 100, 200}
 	coordAddr string
 	inContainer bool
 )
@@ -41,16 +40,13 @@ func checkError(message string, err error) {
 
 func TestGetLatency() {
 	filePath := "metric/get-metric.csv"
-	if inContainer {
-		filePath = "get-metric.csv"
-	}
 	file, err := os.Create(filePath)
 	checkError("Cannot create file", err)
 	defer file.Close()
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	for _, numClient := range clientsToTest {
+	for idx, numClient := range clientsToTest {
 		title := fmt.Sprintf("client%d", numClient)
 		log.Println(title)
 		latencyRow := []string{title}
@@ -85,6 +81,12 @@ func TestGetLatency() {
 		}
 		err := writer.Write(latencyRow)
 		checkError("Cannot write to file", err)
+		if idx != len(clientsToTest) {
+			fmt.Println("Waiting 20 sec to cool down")
+		} else {
+			fmt.Println("Finished")
+		}
+
 		time.Sleep(20 * time.Second)
 	}
 }
