@@ -128,8 +128,15 @@ func (s *Service) handleTransaction(w http.ResponseWriter, r *http.Request) {
 	var msg string
 
 	if !s.coordinator.IsLeader() {
-		msg = "Not a leader"
-		w.WriteHeader(http.StatusBadRequest)
+		leader, err := s.coordinator.FindClusterLeader()
+		if err != nil {
+			msg = "No leader found"
+			w.WriteHeader(http.StatusBadRequest)
+		} else {
+			s.log.Infof(" Leader found: %s", leader)
+			w.WriteHeader(http.StatusMisdirectedRequest)
+			msg = leader
+		}
 		io.WriteString(w, msg)
 		return
 	}

@@ -125,7 +125,7 @@ func (c *Coordinator) IsLeader() bool {
 }
 
 func (c *Coordinator) FindClusterLeader() (string, error) {
-	// WIP: Make RPC calls to modify default leader behavior to fetch the host name of the leader
+	// (If time permits): Make RPC calls to modify default leader behavior to fetch the host name of the leader
 	leader := string(c.raft.Leader())
 	if leader == "" {
 		c.log.Info("Raft coordinator leader unavailable for now")
