@@ -390,7 +390,7 @@ func (c *raftKVClient) newRequest(method, key string, data []byte) (*http.Respon
 		return nil, err
 	}
 
-	return resp, err
+	return resp, nil
 }
 
 func (c *raftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
@@ -409,7 +409,7 @@ func (c *raftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
 		return nil, err
 	}
 
-	return resp, err
+	return resp, nil
 }
 
 func (c *raftKVClient) retryReq(key, method string, data []byte) error {
@@ -456,6 +456,7 @@ func (c *raftKVClient) Get(key string) error {
 		//return err
 	}
 
+	if err != nil { return err }
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -500,6 +501,7 @@ func (c *raftKVClient) Set(key string, value int64) error {
 				break
 			}
 	}
+	if err != nil { return err }
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -540,6 +542,8 @@ func (c *raftKVClient) Delete(key string) error {
 			break
 		}
 	}
+
+	if err != nil { return err }
 
 	if resp.StatusCode == http.StatusOK {
 		color.HiGreen("OK")
@@ -711,6 +715,9 @@ func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 			}
 			break // found some response from a live server (maynt be leader)
 		}
+	}
+	if err != nil {
+		return nil, err
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
