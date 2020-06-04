@@ -7,6 +7,11 @@ build-local:
 	CGO_ENABLED=0 GOARCH=amd64 go build -ldflags "-X main.GitCommit=$(git rev-parse --short HEAD)" -o bin/kv
 	CGO_ENABLED=0 GOARCH=amd64 go build -ldflags "-X main.GitCommit=$(git rev-parse --short HEAD)" -o bin/client client/cmd/main.go
 
+
+performance-test:
+	env GOOS=linux GOARCH=amd64 go build -o metric/performance metric/performance.go
+	docker exec -it client metric/performance -c
+
 build: build-local
 	docker build -t supriyapremkumar/kv:${BUILD_VERSION} .
 
@@ -14,7 +19,6 @@ proto:
 	protoc -I=. --go_out=. raftpb/raft.proto
 
 cluster: cluster-clean
-	rm -rf node*
 	@docker network create raft-net  --subnet 10.10.10.0/24 || true
 	mkdir -p node0 node1 node2 client
 	docker run -d -e BOOTSTRAP_LEADER=yes -p 17000:17000 -v ${PWD}/node0:/pv/  --rm --net raft-net --hostname node0 --name node0 supriyapremkumar/kv:v0.1
@@ -23,12 +27,9 @@ cluster: cluster-clean
 	@printf "\n\n ######################### Starting Client ######################### \n\n"
 	@docker run -it -v ${PWD}/metric:/metric/ --net raft-net --hostname client --name client supriyapremkumar/kv:v0.1 client -e node0:17000
 
-cluster-clean:
+cluster-clean: clean
 	docker rm -fv node0 node1 node2 client || true
 	
 clean:
 	rm -rf node*
 	rm -rf cohort*
-
-client:
-	docker exec -it client bash

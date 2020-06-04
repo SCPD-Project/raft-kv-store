@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"github.com/raft-kv-store/client"
+	flag "github.com/spf13/pflag"
 	"log"
 	"os"
 	"strconv"
@@ -11,7 +12,26 @@ import (
 	"time"
 )
 
-const coordAddr = "node0:17000"
+const (
+	localCoordAddr = "127.0.0.1:17000"
+	dockerCoordAddr = "node0:17000"
+
+)
+
+var (
+	clientsToTest = []int{1, 2, 5, 10, 20, 50, 100, 150}
+	coordAddr string
+	inContainer bool
+)
+
+
+func init() {
+	flag.BoolVarP(&inContainer, "container", "c", false, "Run test in container")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+}
 
 func checkError(message string, err error) {
 	if err != nil {
@@ -20,13 +40,17 @@ func checkError(message string, err error) {
 }
 
 func TestGetLatency() {
-	file, err := os.Create("get-metric.csv")
+	filePath := "metric/get-metric.csv"
+	if inContainer {
+		filePath = "get-metric.csv"
+	}
+	file, err := os.Create(filePath)
 	checkError("Cannot create file", err)
 	defer file.Close()
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	for _, numClient := range []int{1, 2, 5, 10, 20, 50, 100, 150, 200} {
+	for _, numClient := range clientsToTest {
 		title := fmt.Sprintf("client%d", numClient)
 		log.Println(title)
 		latencyRow := []string{title}
@@ -66,5 +90,11 @@ func TestGetLatency() {
 }
 
 func main() {
+	flag.Parse()
+	if inContainer {
+		coordAddr = dockerCoordAddr
+	} else {
+		coordAddr = localCoordAddr
+	}
 	TestGetLatency()
 }
