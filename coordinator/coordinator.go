@@ -1,6 +1,7 @@
 package coordinator
 
 import (
+	"errors"
 	"net/rpc"
 	"os"
 	"path/filepath"
@@ -121,4 +122,14 @@ func (c *Coordinator) Replicate(key, op string, gt *raftpb.GlobalTransaction) er
 func (c *Coordinator) IsLeader() bool {
 
 	return c.raft.State() == raft.Leader
+}
+
+func (c *Coordinator) FindClusterLeader() (string, error) {
+	leader := string(c.raft.Leader())
+	if leader == "" {
+		c.log.Info("Raft coordinator leader unavailable for now")
+		return "", errors.New("no leader available")
+	}
+
+	return leader, nil
 }

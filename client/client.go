@@ -28,6 +28,13 @@ var (
 
 const maxTransferRetries = 5
 
+// keep it simple
+var staticCoordMapping = map[string]string {
+	"node0:18000": "http://node0:17000",
+	"node1:18000": "http://node1:17000",
+	"node2:18000": "http://node2:17000",
+}
+
 type insufficientFundsError struct {
 	key            string
 	remain, expect int64
@@ -260,7 +267,7 @@ func (c *raftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int
 	// Send txn to the server & fetch the response
 	getTxnRsp, err := c.Transaction()
 	if err != nil {
-		return fmt.Errorf("get txn err failed with err: %s", err.Error())
+		return fmt.Errorf("get txn failed with err: %s", err.Error())
 	}
 
 	for _, cmdRsp := range getTxnRsp.Commands {
@@ -354,6 +361,25 @@ func (c *raftKVClient) parseServerAddr(key string) (string, error) {
 	return u.String(), nil
 }
 
+func (c *raftKVClient) findNextAvailableServer() {
+	// simple round robin
+	unavailableServersMap := make(map[string]bool, len(staticCoordMapping))
+	for key, value := range staticCoordMapping {
+		if value == c.serverAddr {
+			unavailableServersMap[key] = true
+		} else {
+			unavailableServersMap[key] = false
+		}
+	}
+
+	for key, value := range unavailableServersMap {
+		if !value {
+			c.serverAddr = staticCoordMapping[key]
+			break
+		}
+	}
+}
+
 func (c *raftKVClient) newRequest(method, key string, data []byte) (*http.Response, error) {
 	url, err := c.parseServerAddr(key)
 	if err != nil {
@@ -363,10 +389,15 @@ func (c *raftKVClient) newRequest(method, key string, data []byte) (*http.Respon
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(" failed in lookup phase 1: ")
 	resp, err := c.client.Do(req)
+	// network issues, retry all coordinators in static map
 	if err != nil {
+		fmt.Println(" failed in lookup phase 2: ", err)
+		c.findNextAvailableServer()
 		return nil, err
 	}
+
 	return resp, nil
 }
 
@@ -375,6 +406,7 @@ func (c *raftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println()
 	u.Path = path.Join(u.Path, "transaction")
 	req, err := http.NewRequest(http.MethodPost, u.String(), bytes.NewBuffer(data))
 	if err != nil {
@@ -382,6 +414,7 @@ func (c *raftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
 	}
 	resp, err := c.client.Do(req)
 	if err != nil {
+		c.findNextAvailableServer()
 		return nil, err
 	}
 	return resp, nil
@@ -519,7 +552,7 @@ func (c *raftKVClient) attemptAdd(key string, amount int64) error {
 	// Send txn to the server & fetch the response
 	getTxnRsp, err := c.Transaction()
 	if err != nil {
-		return fmt.Errorf("get txn err failed with err: %s", err.Error())
+		return fmt.Errorf("get txn failed with err: %s", err.Error())
 	}
 	var oldValue int64
 	for _, cmdRsp := range getTxnRsp.Commands {
@@ -582,6 +615,8 @@ func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 	if resp.StatusCode == http.StatusOK {
 		color.HiGreen("OK")
 		return txnCmdRsp, nil
+	} else if resp.StatusCode == http.StatusMisdirectedRequest {
+		
 	}
 	return nil, errors.New(string(body))
 }
