@@ -82,12 +82,12 @@ func TestGetLatency() {
 		err := writer.Write(latencyRow)
 		checkError("Cannot write to file", err)
 		if idx != len(clientsToTest) - 1 {
-			fmt.Println("Waiting 20 sec to cool down")
+			t := numClient / 5
+			time.Sleep(time.Duration(t) * time.Second)
+			fmt.Printf("Waiting %d sec to cool down", t)
 		} else {
 			fmt.Println("Finished")
 		}
-
-		time.Sleep(20 * time.Second)
 	}
 }
 
