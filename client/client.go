@@ -443,7 +443,7 @@ func (c *raftKVClient) Get(key string) error {
 			for _, value := range staticCoordServers {
 				if skipReqFailedServers[value] { continue }
 				c.serverAddr = value
-				fmt.Printf("err:%s, retrying with alternate server:%s\n", err, c.serverAddr)
+				fmt.Printf("err:%s\n, Retrying with alternate server:%s\n", err, c.serverAddr)
 				skipReqFailedServers[c.serverAddr] = true
 				resp, err = c.newRequest(http.MethodGet, key, nil)
 				if err != nil {
@@ -492,7 +492,7 @@ func (c *raftKVClient) Set(key string, value int64) error {
 				if skipReqFailedServers[value] { continue }
 				c.serverAddr = value
 				skipReqFailedServers[c.serverAddr] = true
-				fmt.Printf("err:%s, retrying with alternate server:%s\n", err, c.serverAddr)
+				fmt.Printf("err:%s\n, Retrying with alternate server:%s\n", err, c.serverAddr)
 				resp, err = c.newRequest(http.MethodPost, key, reqBody)
 				if err != nil {
 					continue
@@ -532,7 +532,7 @@ func (c *raftKVClient) Delete(key string) error {
 			if skipReqFailedServers[value] { continue }
 			c.serverAddr = value
 			skipReqFailedServers[c.serverAddr] = true
-			fmt.Printf("err:%s, retrying with alternate server:%s\n", err, c.serverAddr)
+			fmt.Printf("err:%s\n, retrying with alternate server:%s\n", err, c.serverAddr)
 			resp, err = c.newRequest(http.MethodDelete, key, nil)
 			if err != nil {
 				continue
@@ -704,7 +704,7 @@ func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 			if skipReqFailedServers[value] { continue }
 			c.serverAddr = value
 			skipReqFailedServers[c.serverAddr] = true
-			fmt.Printf("err:%s, retrying with alternate server:%s\n", err, c.serverAddr)
+			fmt.Printf("err:%s, Retrying with alternate server:%s\n", err, c.serverAddr)
 			resp, err = c.newTxnRequest(reqBody)
 			if err != nil {
 				continue
