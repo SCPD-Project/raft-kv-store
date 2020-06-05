@@ -69,7 +69,7 @@ type RaftKVClient struct {
 	txnCmds   *raftpb.RaftCommand
 }
 
-func NewRaftKVClient(serverAddr string, timeout time.Duration) *raftKVClient {
+func NewRaftKVClient(serverAddr string, timeout time.Duration) *RaftKVClient {
 	c := &RaftKVClient{
 		client:     &http.Client{Timeout: timeout},
 		serverAddr: addURLScheme(serverAddr),
@@ -397,8 +397,7 @@ func (c *RaftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
 	return resp, nil
 }
 
-<<<<<<< HEAD
-func (c *raftKVClient) redirectReqToLeader(key, method string, data []byte, maxRetries int) error {
+func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte, maxRetries int) error {
 	var resp *http.Response
 	var err error
 
@@ -417,6 +416,7 @@ func (c *raftKVClient) redirectReqToLeader(key, method string, data []byte, maxR
 			color.HiGreen("OK")
 			return nil
 		} else if resp.StatusCode == http.StatusMisdirectedRequest {
+			c.serverAddr = staticIPLeaderMapping[string(body)]
 			err = c.redirectReqToLeader(key, method, data, maxRetries-1)
 		}
 	} else {
@@ -427,7 +427,7 @@ func (c *raftKVClient) redirectReqToLeader(key, method string, data []byte, maxR
 }
 
 // Service unavailable, retry with known servers
-func (c *raftKVClient) retryReqExceptActive(method, key string,data []byte) (*http.Response, error) {
+func (c *RaftKVClient) retryReqExceptActive(method, key string,data []byte) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 
@@ -449,15 +449,11 @@ func (c *raftKVClient) retryReqExceptActive(method, key string,data []byte) (*ht
 	return nil, err
 }
 
-func (c *raftKVClient) Get(key string) error {
+func (c *RaftKVClient) Get(key string) error {
 	var resp *http.Response
 	var err error
 
 	resp, err = c.newRequest(http.MethodGet, key, nil)
-=======
-func (c *RaftKVClient) Get(key string) error {
-	resp, err := c.newRequest(http.MethodGet, key, nil)
->>>>>>> 6d4de027221f82b113d3412229a6e8457cc00d7f
 	if err != nil {
 		fmt.Printf("err: %s\n", err)
 		resp, err = c.retryReqExceptActive(http.MethodGet, key, nil)
@@ -632,8 +628,7 @@ func (c *RaftKVClient) attemptAdd(key string, amount int64) error {
 	return nil
 }
 
-<<<<<<< HEAD
-func (c* raftKVClient) transactionRedirectReqToLeader(reqBody []byte, maxRetries int) (*raftpb.RaftCommand, error) {
+func (c* RaftKVClient) transactionRedirectReqToLeader(reqBody []byte, maxRetries int) (*raftpb.RaftCommand, error) {
 	var resp *http.Response
 	var err error
 
@@ -656,6 +651,7 @@ func (c* raftKVClient) transactionRedirectReqToLeader(reqBody []byte, maxRetries
 			color.HiGreen("OK")
 			return txnCmdRsp, nil
 		} else if resp.StatusCode == http.StatusMisdirectedRequest {
+			c.serverAddr = staticIPLeaderMapping[string(body)]
 			_, err = c.transactionRedirectReqToLeader(reqBody, maxRetries-1)
 		}
 	} else {
@@ -665,7 +661,7 @@ func (c* raftKVClient) transactionRedirectReqToLeader(reqBody []byte, maxRetries
 	return nil, err
 }
 
-func (c *raftKVClient) transactionRetryReq(reqBody []byte) (*http.Response, error) {
+func (c *RaftKVClient) transactionRetryReq(reqBody []byte) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 
@@ -685,10 +681,7 @@ func (c *raftKVClient) transactionRetryReq(reqBody []byte) (*http.Response, erro
 	return nil, err
 }
 
-func (c *raftKVClient) Transaction() (*raftpb.RaftCommand, error) {
-=======
 func (c *RaftKVClient) Transaction() (*raftpb.RaftCommand, error) {
->>>>>>> 6d4de027221f82b113d3412229a6e8457cc00d7f
 	oldLen := len(c.txnCmds.Commands)
 	c.OptimizeTxnCommands()
 	newLen := len(c.txnCmds.Commands)

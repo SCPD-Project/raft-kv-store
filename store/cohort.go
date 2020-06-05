@@ -323,6 +323,12 @@ func (c *Cohort) replicate(key, op string, so *raftpb.ShardOps) error {
 		return err
 	}
 
+	if c.raft.State() == raft.Leader {
+		c.store.log.Infof("current leader")
+	} else {
+		c.store.log.Infof("not the leader: %s", string(c.raft.Leader()))
+	}
+
 	f := c.raft.Apply(b, common.RaftTimeout)
 
 	return f.Error()
