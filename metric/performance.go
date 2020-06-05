@@ -143,7 +143,7 @@ func TestSetLatency(filePath string, conflictRate int) {
 	}
 }
 
-func TestTxnConflictLatency(filePath string, conflictRate int, singleShard bool) {
+func TestTxnLatency(filePath string, conflictRate int, singleShard bool) {
 	var mode string
 	if singleShard {
 		mode = "single"
@@ -247,5 +247,5 @@ func main() {
 	for _, i := range []int{0, 2, 5, 10} {
 		TestSetLatency(setCSV, i)
 	}
-	TestTxnConflictLatency(txnCSV, 0, true)
+	TestTxnLatency(txnCSV, 0, true)
 }
