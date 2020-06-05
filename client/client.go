@@ -397,30 +397,23 @@ func (c *RaftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
 	return resp, nil
 }
 
-func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte, maxRetries int) error {
+func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) error {
 	var resp *http.Response
 	var err error
 
-	if maxRetries > 0 {
-		fmt.Printf("redirecting request to leader: %s\n", c.serverAddr)
-		resp, err = c.newRequest(method, key, data)
-		if err != nil {
-			resp, err = c.retryReqExceptActive(method, key, data)
-			return err
-		}
-		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return errors.New(string(body))
-		} else if resp.StatusCode == http.StatusOK {
-			color.HiGreen("OK")
-			return nil
-		} else if resp.StatusCode == http.StatusMisdirectedRequest {
-			c.serverAddr = staticIPLeaderMapping[string(body)]
-			err = c.redirectReqToLeader(key, method, data, maxRetries-1)
-		}
-	} else {
-		return errors.New("exhausted max leader redirections. retry...")
+	fmt.Printf("redirecting request to leader: %s\n", c.serverAddr)
+	resp, err = c.newRequest(method, key, data)
+	if err != nil {
+		resp, err = c.retryReqExceptActive(method, key, data)
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return errors.New(string(body))
+	} else if resp.StatusCode == http.StatusOK {
+		color.HiGreen("OK")
+		return nil
 	}
 
 	return err
@@ -471,7 +464,7 @@ func (c *RaftKVClient) Get(key string) error {
 	} else if resp.StatusCode == http.StatusMisdirectedRequest {
 		// Update leader so this request can be retried at the leader
 		c.serverAddr = staticIPLeaderMapping[string(body)]
-		return c.redirectReqToLeader(key, http.MethodGet, nil, maxTransferRetries)
+		return c.redirectReqToLeader(key, http.MethodGet, nil)
 	}
 	return errors.New(string(body))
 }
@@ -503,7 +496,7 @@ func (c *RaftKVClient) Set(key string, value int64) error {
 		return nil
 	} else if resp.StatusCode == http.StatusMisdirectedRequest {
 		c.serverAddr = staticIPLeaderMapping[string(body)]
-		return c.redirectReqToLeader(key, http.MethodPost, reqBody, maxTransferRetries)
+		return c.redirectReqToLeader(key, http.MethodPost, reqBody)
 	}
 	return errors.New(string(body))
 }
@@ -527,7 +520,7 @@ func (c *RaftKVClient) Delete(key string) error {
 		return nil
 	} else if resp.StatusCode == http.StatusMisdirectedRequest {
 		c.serverAddr = staticIPLeaderMapping[string(body)]
-		return c.redirectReqToLeader(key, http.MethodDelete, nil, maxTransferRetries)
+		return c.redirectReqToLeader(key, http.MethodDelete, nil)
 	}
 	return errors.New(string(body))
 }
@@ -628,34 +621,27 @@ func (c *RaftKVClient) attemptAdd(key string, amount int64) error {
 	return nil
 }
 
-func (c* RaftKVClient) transactionRedirectReqToLeader(reqBody []byte, maxRetries int) (*raftpb.RaftCommand, error) {
+func (c* RaftKVClient) transactionRedirectReqToLeader(reqBody []byte) (*raftpb.RaftCommand, error) {
 	var resp *http.Response
 	var err error
 
-	if maxRetries > 0 {
-		fmt.Printf("redirecting request to leader: %s\n", c.serverAddr)
-		resp, err = c.newTxnRequest(reqBody)
-		if err != nil {
-			resp, err = c.transactionRetryReq(reqBody)
-		}
-		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, errors.New(string(body))
-		}
-		txnCmdRsp := &raftpb.RaftCommand{}
-		if err = proto.Unmarshal(body, txnCmdRsp); err != nil {
-			return nil, errors.New(string(body))
-		}
-		if resp.StatusCode == http.StatusOK {
-			color.HiGreen("OK")
-			return txnCmdRsp, nil
-		} else if resp.StatusCode == http.StatusMisdirectedRequest {
-			c.serverAddr = staticIPLeaderMapping[string(body)]
-			_, err = c.transactionRedirectReqToLeader(reqBody, maxRetries-1)
-		}
-	} else {
-		return nil, errors.New("exhausted max leader redirections. retry...")
+	fmt.Printf("redirecting request to leader: %s\n", c.serverAddr)
+	resp, err = c.newTxnRequest(reqBody)
+	if err != nil {
+		resp, err = c.transactionRetryReq(reqBody)
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, errors.New(string(body))
+	}
+	txnCmdRsp := &raftpb.RaftCommand{}
+	if err = proto.Unmarshal(body, txnCmdRsp); err != nil {
+		return nil, errors.New(string(body))
+	}
+	if resp.StatusCode == http.StatusOK {
+		color.HiGreen("OK")
+		return txnCmdRsp, nil
 	}
 
 	return nil, err
@@ -726,7 +712,7 @@ func (c *RaftKVClient) Transaction() (*raftpb.RaftCommand, error) {
 		return txnCmdRsp, nil
 	} else if resp.StatusCode == http.StatusMisdirectedRequest {
 		c.serverAddr = staticIPLeaderMapping[string(body)]
-		return c.transactionRedirectReqToLeader(reqBody, maxTransferRetries)
+		return c.transactionRedirectReqToLeader(reqBody)
 	}
 	return nil, errors.New(string(body))
 }
