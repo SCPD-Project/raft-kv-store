@@ -54,7 +54,7 @@ func (c *Coordinator) FindLeader(key string) (string, int64, error) {
 		leader, err := c.Leader(nodeAddr)
 
 		if err == nil && leader != "" {
-			return leader, shardID, nil
+			return nodeAddr, shardID, nil
 		}
 	}
 	return "", -1, fmt.Errorf("shard %d is not reachable", shardID)
