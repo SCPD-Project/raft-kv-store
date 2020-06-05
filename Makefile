@@ -22,8 +22,8 @@ cluster: cluster-clean
 	@docker network create raft-net  --subnet 10.10.10.0/24 || true
 	mkdir -p node0 node1 node2 client
 	docker run -d -e BOOTSTRAP_LEADER=yes -p 17000:17000 -v ${PWD}/node0:/pv/  --rm --net raft-net --hostname node0 --name node0 supriyapremkumar/kv:v0.1
-	docker run -d -e BOOTSTRAP_FOLLOWER=yes -p 17001:17001 -v ${PWD}/node1:/pv/ --rm --net raft-net --hostname node1 --name node1 supriyapremkumar/kv:v0.1
-	docker run -d -e BOOTSTRAP_FOLLOWER=yes -p 17002:17002 -v ${PWD}/node2:/pv/ --rm --net raft-net --hostname node2 --name node2 supriyapremkumar/kv:v0.1
+	docker run -d -e BOOTSTRAP_FOLLOWER=yes -p 17001:17000 -v ${PWD}/node1:/pv/ --rm --net raft-net --hostname node1 --name node1 supriyapremkumar/kv:v0.1
+	docker run -d -e BOOTSTRAP_FOLLOWER=yes -p 17002:17000 -v ${PWD}/node2:/pv/ --rm --net raft-net --hostname node2 --name node2 supriyapremkumar/kv:v0.1
 	@printf "\n\n ######################### Starting Client ######################### \n\n"
 	@docker run -it -v ${PWD}/metric:/metric/ --net raft-net --hostname client --name client supriyapremkumar/kv:v0.1 client -e node0:17000
 
