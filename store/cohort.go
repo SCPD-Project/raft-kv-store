@@ -126,12 +126,14 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *raftpb.
 
 	applyFuture := c.store.raft.Apply(b, common.RaftTimeout)
 	if err := applyFuture.Error(); err != nil {
+		c.store.log.Errorf("apply error: %s", err.Error())
 		return err
 	}
 
 	resp, ok := applyFuture.Response().(*FSMApplyResponse)
 	*reply = resp.reply
 	if ok && resp.err != nil {
+		c.store.log.Errorf("Fsm resp err: %s", resp.err.Error())
 		return resp.err
 	}
 
@@ -321,6 +323,12 @@ func (c *Cohort) replicate(key, op string, so *raftpb.ShardOps) error {
 	b, err := proto.Marshal(cmd)
 	if err != nil {
 		return err
+	}
+
+	if c.raft.State() == raft.Leader {
+		c.store.log.Infof("current leader")
+	} else {
+		c.store.log.Infof("not the leader: %s", string(c.raft.Leader()))
 	}
 
 	f := c.raft.Apply(b, common.RaftTimeout)
