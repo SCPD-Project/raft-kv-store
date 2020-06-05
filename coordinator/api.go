@@ -38,6 +38,7 @@ func (c *Coordinator) Get(key string) (int64, error) {
 	}
 
 	err = client.Call("Cohort.ProcessCommands", cmd, &response)
+	c.log.Infof(" Value of key: %s --> %d", key, response.Value)
 
 	return response.Value, err
 

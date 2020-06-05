@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"time"
 
 	"github.com/raft-kv-store/client"
 	flag "github.com/spf13/pflag"
@@ -28,7 +29,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-	c := client.NewRaftKVClient(serverAddress)
+	c := client.NewRaftKVClient(serverAddress, 2 * time.Second)
 	c.Run()
 	signal.Notify(c.Terminate, os.Interrupt)
 	<-c.Terminate

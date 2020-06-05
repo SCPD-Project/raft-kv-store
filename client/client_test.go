@@ -7,6 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/raft-kv-store/common"
@@ -15,6 +16,7 @@ import (
 )
 
 const coordAddr = "127.0.0.1:17000"
+const clientTimeout = 5 * time.Second
 
 func (c *RaftKVClient) appendTestCmds(method, key string, value ...int64) {
 	switch method {
@@ -33,7 +35,7 @@ func (c *RaftKVClient) appendTestCmds(method, key string, value ...int64) {
 }
 
 func TestClient(t *testing.T) {
-	c := NewRaftKVClient("localhost:20000")
+	c := NewRaftKVClient("localhost:20000", clientTimeout)
 
 	// set a 5, set a 3, set b 4, del a => set b 4
 	c.txnCmds = &raftpb.RaftCommand{}
@@ -137,7 +139,7 @@ func TestMultiClientsMultiGet(t *testing.T) {
 	var success int32
 	var clients []*RaftKVClient
 	for i := 0; i < 300; i++ {
-		clients = append(clients, NewRaftKVClient(coordAddr))
+		clients = append(clients, NewRaftKVClient(coordAddr, clientTimeout))
 	}
 	var wg sync.WaitGroup
 	for i, c := range clients {
@@ -156,12 +158,12 @@ func TestMultiClientsMultiGet(t *testing.T) {
 }
 
 func TestMultiClientsMultiSet(t *testing.T) {
-	c := NewRaftKVClient(coordAddr)
+	c := NewRaftKVClient(coordAddr, clientTimeout)
 	c.Delete("x")
 	c.Delete("y")
 	var clients []*RaftKVClient
 	for i := 0; i < 5; i++ {
-		clients = append(clients, NewRaftKVClient(coordAddr))
+		clients = append(clients, NewRaftKVClient(coordAddr, clientTimeout))
 		clients[i].txnCmds = &raftpb.RaftCommand{
 			Commands: []*raftpb.Command{
 				{Method: common.SET, Key: "x", Value: int64(i + 1)},
@@ -184,12 +186,12 @@ func TestMultiClientsMultiSet(t *testing.T) {
 }
 
 func TestMultiXfer(t *testing.T) {
-	c := NewRaftKVClient(coordAddr)
+	c := NewRaftKVClient(coordAddr, clientTimeout)
 	c.Set("x", 1000)
 	c.Set("y", 0)
 	var clients []*RaftKVClient
 	for i := 0; i < 50; i++ {
-		clients = append(clients, NewRaftKVClient(coordAddr))
+		clients = append(clients, NewRaftKVClient(coordAddr, clientTimeout))
 	}
 	var wg sync.WaitGroup
 	for _, c := range clients {

@@ -62,7 +62,7 @@ func TestGetLatency(filePath string) {
 		latencies := make([][]int, numClient)
 		var clients []*client.RaftKVClient
 		for i := 0; i < numClient; i++ {
-			clients = append(clients, client.NewRaftKVClient(coordAddr))
+			clients = append(clients, client.NewRaftKVClient(coordAddr, requestTimeout))
 		}
 		var wg sync.WaitGroup
 		for i, c := range clients {
