@@ -404,6 +404,7 @@ func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) erro
 	fmt.Printf("redirecting request to leader: %s\n", c.serverAddr)
 	resp, err = c.newRequest(method, key, data)
 	if err != nil {
+		fmt.Printf("err:%s", err)
 		resp, err = c.retryReqExceptActive(method, key, data)
 		return err
 	}
@@ -430,8 +431,8 @@ func (c *RaftKVClient) retryReqExceptActive(method, key string,data []byte) (*ht
 			continue
 		}
 		c.serverAddr = value
-		resp, err = c.newRequest(method, key, data)
 		fmt.Printf("Retrying with alternate server:%s\n", c.serverAddr)
+		resp, err = c.newRequest(method, key, data)
 		if err != nil {
 			fmt.Printf("err: %s\n", err)
 			continue
@@ -466,6 +467,7 @@ func (c *RaftKVClient) Get(key string) error {
 		c.serverAddr = staticIPLeaderMapping[string(body)]
 		return c.redirectReqToLeader(key, http.MethodGet, nil)
 	}
+
 	return errors.New(string(body))
 }
 
@@ -498,6 +500,7 @@ func (c *RaftKVClient) Set(key string, value int64) error {
 		c.serverAddr = staticIPLeaderMapping[string(body)]
 		return c.redirectReqToLeader(key, http.MethodPost, reqBody)
 	}
+
 	return errors.New(string(body))
 }
 
@@ -522,6 +525,7 @@ func (c *RaftKVClient) Delete(key string) error {
 		c.serverAddr = staticIPLeaderMapping[string(body)]
 		return c.redirectReqToLeader(key, http.MethodDelete, nil)
 	}
+
 	return errors.New(string(body))
 }
 

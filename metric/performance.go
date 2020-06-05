@@ -18,6 +18,7 @@ const (
 	localCoordAddr  = "127.0.0.1:17000"
 	dockerCoordAddr = "node0:17000"
 	requestDuration = 5 * time.Second
+	requestTimeout = 5 * time.Second
 )
 
 var (
@@ -55,7 +56,7 @@ func TestGetLatency() {
 		latencies := make([][]int, numClient)
 		var clients []*client.RaftKVClient
 		for i := 0; i < numClient; i++ {
-			clients = append(clients, client.NewRaftKVClient(coordAddr))
+			clients = append(clients, client.NewRaftKVClient(coordAddr, requestTimeout))
 		}
 		var wg sync.WaitGroup
 		for i, c := range clients {

@@ -126,12 +126,14 @@ func (c *Cohort) ProcessCommands(raftCommand *raftpb.RaftCommand, reply *raftpb.
 
 	applyFuture := c.store.raft.Apply(b, common.RaftTimeout)
 	if err := applyFuture.Error(); err != nil {
+		c.store.log.Errorf("apply error: %s", err.Error())
 		return err
 	}
 
 	resp, ok := applyFuture.Response().(*FSMApplyResponse)
 	*reply = resp.reply
 	if ok && resp.err != nil {
+		c.store.log.Errorf("Fsm resp err: %s", resp.err.Error())
 		return resp.err
 	}
 
