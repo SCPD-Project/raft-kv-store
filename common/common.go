@@ -133,3 +133,11 @@ func GetDerivedAddress(address string) string {
 	}
 	return ipPort[0] + ":" + strconv.Itoa(int(port+MagicDiff))
 }
+
+func SimpleHash(s string, bin int) int64{
+	h := 0
+	for _, c := range s {
+		h = 31*h + int(c)
+	}
+	return int64(h % bin)
+}
