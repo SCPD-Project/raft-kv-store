@@ -25,6 +25,7 @@ const (
 	getCSV           = "metric/metric-get.csv"
 	setCSV           = "metric/metric-set-%d.csv"
 	txnCSV           = "metric/metric-txn-%d-%s.csv"
+	readOnlyCSV = "metric/metric-read-%d-%s.csv"
 )
 
 var (
@@ -143,7 +144,7 @@ func TestSetLatency(filePath string, conflictRate int) {
 	}
 }
 
-func TestTxnLatency(filePath string, conflictRate int, singleShard bool) {
+func TestTxnLatency(filePath string, conflictRate int, singleShard, readOnly bool) {
 	var mode string
 	if singleShard {
 		mode = "single"
@@ -193,10 +194,16 @@ func TestTxnLatency(filePath string, conflictRate int, singleShard bool) {
 						}
 						offset++
 					}
+					var cmd string
+					if readOnly {
+						cmd = common.GET
+					} else {
+						cmd = common.SET
+					}
 					c.SetTxnCmd(&raftpb.RaftCommand{
 						Commands: []*raftpb.Command{
-							{Method: common.SET, Key: key1, Value: int64(k + 1)},
-							{Method: common.SET, Key: key2, Value: int64(-k - 1)},
+							{Method: cmd, Key: key1, Value: int64(k + 1)},
+							{Method: cmd, Key: key2, Value: int64(-k - 1)},
 						},
 						IsTxn: true,
 					})
@@ -221,6 +228,8 @@ func TestTxnLatency(filePath string, conflictRate int, singleShard bool) {
 	}
 }
 
+
+
 func coolDown(clientsToTest []int, idx int) {
 	if idx != len(clientsToTest)-1 {
 		fmt.Printf("Waiting %s to cool down for %d clients test...\n", coolDownDuration, clientsToTest[idx+1])
@@ -243,9 +252,10 @@ func main() {
 	} else {
 		coordAddr = localCoordAddr
 	}
-	TestGetLatency(getCSV)
-	for _, i := range []int{0, 2, 5, 10} {
-		TestSetLatency(setCSV, i)
-	}
-	TestTxnLatency(txnCSV, 0, true)
+	//TestGetLatency(getCSV)
+	//for _, i := range []int{0, 2, 5, 10} {
+	//	TestSetLatency(setCSV, i)
+	//}
+	//TestTxnLatency(txnCSV, 0, false, false)
+	TestTxnLatency(readOnlyCSV, 0, false, true)
 }
