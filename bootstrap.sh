@@ -8,7 +8,7 @@ if [ -n "$BOOTSTRAP_LEADER" ];then
   kv -i "$(hostname)" -l :17002 -r "$(hostname)":18002 -d "$(hostname)/shard-1" > /pv/logs/shard1.log 2>&1 &
 
   echo "Starting Co-ordination Service"
-  kv -i "$(hostname)" -c -l :17000 -r "$(hostname)":18000 -d "$(hostname)" > /pv/logs/coord.log 2>&1
+  kv -i "$(hostname)" -c -l :17000 -r "$(hostname)":18000 -d "$(hostname)" > /pv/logs/coord.log 2>&1 &
 elif [ -n "$BOOTSTRAP_FOLLOWER" ]; then
   echo "$(hostname) is configured as follower"
   echo "Starting Shard Services"
@@ -17,6 +17,10 @@ elif [ -n "$BOOTSTRAP_FOLLOWER" ]; then
   kv -i "$(hostname)" -l :17002 -r "$(hostname)":18002 -j node0:17002 -d "$(hostname)/shard-1" > /pv/logs/"$(hostname)-shard1.log" 2>&1 &
 
   echo "Starting Co-ordination Service"
-  kv -i "$(hostname)" -c -l :17000 -r "$(hostname)":18000 -j node0:17000 -d "$(hostname)" > /pv/logs/coord.log 2>&1
+  kv -i "$(hostname)" -c -l :17000 -r "$(hostname)":18000 -j node0:17000 -d "$(hostname)" > /pv/logs/coord.log 2>&1 &
 
 fi
+while true
+do
+  sleep 1
+done
