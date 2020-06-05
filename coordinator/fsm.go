@@ -72,7 +72,8 @@ func (f *fsm) Restore(rc io.ReadCloser) error {
 		f.log.Fatal(err)
 	}
 
-	o := &raftpb.TxidMap{}
+	var o *raftpb.TxidMap
+	//o := &raftpb.TxidMap{}
 	if err := proto.Unmarshal(b, o); err != nil {
 		return err
 	}

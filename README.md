@@ -66,6 +66,16 @@ Key=universe, Value=42
   - If `[from-key]` has a current value less than `[value]`, return message `Insufficient funds`
 - `exit`: exit client from server
 
+## Performance test
+To run the performance test locally:
+```bazaar
+go run metric/performance.go
+```
+To run the performance in the client container:
+```bazaar
+make test-performance
+```
+
 ## License
 
     Copyright [2020] [Chen Chen, Varun Kulkarni, Supriya Premkumar, Renga Srinivasan]
