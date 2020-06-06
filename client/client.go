@@ -395,11 +395,12 @@ func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) erro
 	var resp *http.Response
 	var err error
 
-	fmt.Printf("Redirecting to: %s\n", c.serverAddr)
+	fmt.Printf("Redirecting ==> %s\n", c.serverAddr)
 	resp, err = c.newRequest(method, key, data)
 	if err != nil {
 		fmt.Println(err)
 		resp, err = c.retryReqExceptActive(method, key, data)
+		fmt.Println("Cluster not available")
 		return err
 	}
 	defer resp.Body.Close()
@@ -429,10 +430,10 @@ func (c *RaftKVClient) retryReqExceptActive(method, key string,data []byte) (*ht
 			continue
 		}
 		c.serverAddr = value
-		fmt.Printf("Retrying with:%s\n", c.serverAddr)
+		fmt.Printf("Retrying with: %s\n", c.serverAddr)
 		resp, err = c.newRequest(method, key, data)
 		if err != nil {
-			fmt.Printf("err: %s\n", err)
+			fmt.Println(err)
 			continue
 		}
 		return resp, nil // found a responsive node (not necessarily leader)
@@ -447,7 +448,7 @@ func (c *RaftKVClient) Get(key string) error {
 
 	resp, err = c.newRequest(http.MethodGet, key, nil)
 	if err != nil {
-		fmt.Printf("err: %s\n", err)
+		fmt.Println(err)
 		resp, err = c.retryReqExceptActive(http.MethodGet, key, nil)
 	}
 
@@ -481,7 +482,7 @@ func (c *RaftKVClient) Set(key string, value int64) error {
 	}
 	resp, err := c.newRequest(http.MethodPost, key, reqBody)
 	if err != nil {
-		fmt.Printf("err: %s\n", err)
+		fmt.Println(err)
 		resp, err = c.retryReqExceptActive(http.MethodPost, key, reqBody)
 	}
 	if err != nil { return err }
@@ -510,7 +511,7 @@ func (c *RaftKVClient) Delete(key string) error {
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("err: %s\n", err)
+		fmt.Println(err)
 		resp, err = c.retryReqExceptActive(http.MethodDelete, key, nil)
 	}
 
@@ -627,7 +628,7 @@ func (c* RaftKVClient) transactionRedirectReqToLeader(reqBody []byte) (*raftpb.R
 	var resp *http.Response
 	var err error
 
-	fmt.Printf("redirecting request to leader: %s\n", c.serverAddr)
+	fmt.Printf("Redirecting ==> %s\n", c.serverAddr)
 	resp, err = c.newTxnRequest(reqBody)
 	if err != nil {
 		resp, err = c.transactionRetryReq(reqBody)
