@@ -20,6 +20,7 @@ const (
 	// FIXME: this won't work after client finding leader PR merged when running locally
 	localCoordAddr   = "127.0.0.1:17000"
 	dockerCoordAddr  = "node0:17000"
+	clientTimeout = 5 * time.Second
 	requestDuration  = 5 * time.Second
 	coolDownDuration = 30 * time.Second
 	getCSV           = "metric/metric-get.csv"
@@ -62,7 +63,7 @@ func TestGetLatency(filePath string) {
 		latencies := make([][]int, numClient)
 		var clients []*client.RaftKVClient
 		for i := 0; i < numClient; i++ {
-			clients = append(clients, client.NewRaftKVClient(coordAddr, requestTimeout))
+			clients = append(clients, client.NewRaftKVClient(coordAddr, clientTimeout))
 		}
 		var wg sync.WaitGroup
 		for i, c := range clients {
@@ -108,7 +109,7 @@ func TestSetLatency(filePath string, conflictRate int) {
 		latencies := make([][]int, numClient)
 		var clients []*client.RaftKVClient
 		for i := 0; i < numClient; i++ {
-			clients = append(clients, client.NewRaftKVClient(coordAddr))
+			clients = append(clients, client.NewRaftKVClient(coordAddr, clientTimeout))
 		}
 		var wg sync.WaitGroup
 		for i, c := range clients {
@@ -164,7 +165,7 @@ func TestTxnLatency(filePath string, conflictRate int, singleShard, readOnly boo
 		latencies := make([][]int, numClient)
 		var clients []*client.RaftKVClient
 		for i := 0; i < numClient; i++ {
-			clients = append(clients, client.NewRaftKVClient(coordAddr))
+			clients = append(clients, client.NewRaftKVClient(coordAddr, clientTimeout))
 		}
 		var wg sync.WaitGroup
 		for i, c := range clients {
@@ -227,6 +228,8 @@ func TestTxnLatency(filePath string, conflictRate int, singleShard, readOnly boo
 		coolDown(clientsToTest, idx)
 	}
 }
+
+
 
 
 
