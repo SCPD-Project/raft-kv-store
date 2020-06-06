@@ -255,10 +255,10 @@ func main() {
 	} else {
 		coordAddr = localCoordAddr
 	}
-	//TestGetLatency(getCSV)
-	//for _, i := range []int{0, 2, 5, 10} {
-	//	TestSetLatency(setCSV, i)
-	//}
-	//TestTxnLatency(txnCSV, 0, false, false)
+	TestGetLatency(getCSV)
+	for _, i := range []int{0, 2, 5, 10} {
+		TestSetLatency(setCSV, i)
+	}
+	TestTxnLatency(txnCSV, 0, false, false)
 	TestTxnLatency(readOnlyCSV, 0, false, true)
 }
