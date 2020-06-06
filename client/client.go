@@ -404,6 +404,7 @@ func (c *RaftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
 func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) error {
 	var resp *http.Response
 	var err error
+	var body []byte
 
 	fmt.Printf("redirecting request to leader: %s\n", c.serverAddr)
 	resp, err = c.newRequest(method, key, data)
@@ -413,11 +414,16 @@ func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) erro
 		return err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return errors.New(string(body))
 	} else if resp.StatusCode == http.StatusOK {
-		color.HiGreen("OK")
+		switch method {
+		case common.SET, common.DEL:
+			color.HiGreen("OK")
+		case common.GET:
+			color.HiGreen(string(body))
+		}
 		return nil
 	}
 
@@ -638,6 +644,7 @@ func (c *RaftKVClient) attemptAdd(key string, amount int64) error {
 func (c *RaftKVClient) transactionRedirectReqToLeader(reqBody []byte) (*raftpb.RaftCommand, error) {
 	var resp *http.Response
 	var err error
+	var body []byte
 
 	fmt.Printf("redirecting request to leader: %s\n", c.serverAddr)
 	resp, err = c.newTxnRequest(reqBody)
@@ -645,7 +652,7 @@ func (c *RaftKVClient) transactionRedirectReqToLeader(reqBody []byte) (*raftpb.R
 		resp, err = c.transactionRetryReq(reqBody)
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.New(string(body))
 	}
