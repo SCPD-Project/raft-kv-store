@@ -84,6 +84,10 @@ func (c *RaftKVClient) setServerAddr(newAddr string) {
 	c.serverAddr = addURLScheme(newAddr)
 }
 
+func (c *RaftKVClient) SetTxnCmd(t *raftpb.RaftCommand) {
+	c.txnCmds = t
+}
+
 func (c *RaftKVClient) readString() []string {
 	var cmdArr []string
 	fmt.Print(">")
