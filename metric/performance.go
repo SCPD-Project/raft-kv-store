@@ -20,13 +20,13 @@ const (
 	// FIXME: this won't work after client finding leader PR merged when running locally
 	localCoordAddr   = "127.0.0.1:17000"
 	dockerCoordAddr  = "node0:17000"
-	clientTimeout = 5 * time.Second
+	clientTimeout    = 5 * time.Second
 	requestDuration  = 5 * time.Second
 	coolDownDuration = 30 * time.Second
 	getCSV           = "metric/metric-get.csv"
 	setCSV           = "metric/metric-set-%d.csv"
 	txnCSV           = "metric/metric-txn-%d-%s.csv"
-	readOnlyCSV = "metric/metric-read-%d-%s.csv"
+	readOnlyCSV      = "metric/metric-read-%d-%s.csv"
 )
 
 var (
@@ -228,10 +228,6 @@ func TestTxnLatency(filePath string, conflictRate int, singleShard, readOnly boo
 		coolDown(clientsToTest, idx)
 	}
 }
-
-
-
-
 
 func coolDown(clientsToTest []int, idx int) {
 	if idx != len(clientsToTest)-1 {
