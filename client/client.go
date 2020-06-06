@@ -37,14 +37,6 @@ func (err *insufficientFundsError) Error() string {
 	return fmt.Sprintf("Insufficient funds: %d < %d in %s", err.remain, err.expect, err.key)
 }
 
-/*type serverUnavailableError struct {
-	err            string
-}
-
-func (err *serverUnavailableError) Error() string {
-	return fmt.Sprintf("err: %s", err)
-}*/
-
 func parseInt64(s string) (int64, error) {
 	return strconv.ParseInt(s, 10, 64)
 }
@@ -137,9 +129,9 @@ func (c *RaftKVClient) validEndTxn(cmdArr []string) error {
 	return nil
 }
 
-func (c *RaftKVClient) validExit(cmdArr []string) error {
+func (c *RaftKVClient) validCmd0(cmdArr []string) error {
 	if len(cmdArr) != 1 {
-		return errors.New("Invalid exit command. Correct syntax: exit")
+		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s", cmdArr[0])
 	}
 	return nil
 }
@@ -172,8 +164,8 @@ func (c *RaftKVClient) validCmd(cmdArr []string) error {
 		return c.validTxn(cmdArr)
 	case common.ENDTXN:
 		return c.validEndTxn(cmdArr)
-	case common.EXIT:
-		return c.validExit(cmdArr)
+	case common.EXIT, common.LEADER:
+		return c.validCmd0(cmdArr)
 	case common.TRANSFER:
 		return c.validTxnTransfer(cmdArr)
 	default:
@@ -340,6 +332,8 @@ func (c *RaftKVClient) Run() {
 			if err := c.AddTransaction(cmdArr); err != nil {
 				fmt.Println(err)
 			}
+		case common.LEADER:
+			fmt.Println(c.serverAddr)
 		case common.TXN:
 			c.TransactionRun(cmdArr)
 		case common.TRANSFER:
@@ -401,10 +395,10 @@ func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) erro
 	var resp *http.Response
 	var err error
 
-	fmt.Printf("redirecting request to leader: %s\n", c.serverAddr)
+	fmt.Printf("Redirecting to: %s\n", c.serverAddr)
 	resp, err = c.newRequest(method, key, data)
 	if err != nil {
-		fmt.Printf("err:%s", err)
+		fmt.Println(err)
 		resp, err = c.retryReqExceptActive(method, key, data)
 		return err
 	}
@@ -413,7 +407,11 @@ func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) erro
 	if err != nil {
 		return errors.New(string(body))
 	} else if resp.StatusCode == http.StatusOK {
-		color.HiGreen("OK")
+		if method == http.MethodGet {
+			color.HiGreen(string(body))
+		} else {
+			color.HiGreen("OK")
+		}
 		return nil
 	}
 
@@ -431,7 +429,7 @@ func (c *RaftKVClient) retryReqExceptActive(method, key string,data []byte) (*ht
 			continue
 		}
 		c.serverAddr = value
-		fmt.Printf("Retrying with alternate server:%s\n", c.serverAddr)
+		fmt.Printf("Retrying with:%s\n", c.serverAddr)
 		resp, err = c.newRequest(method, key, data)
 		if err != nil {
 			fmt.Printf("err: %s\n", err)
