@@ -42,9 +42,9 @@ const (
 	RaftTimeout         = 10 * time.Second
 	NodeIDLen           = 5
 
-	MagicDiff = 20000
-	RaftPVBaseDir = "/pv"
-	LockContention      = 1 * time.Microsecond // This can be change to test concurrentMap performance
+	MagicDiff      = 20000
+	RaftPVBaseDir  = "/pv"
+	LockContention = 1 * time.Microsecond // This can be change to test concurrentMap performance
 
 )
 
@@ -134,7 +134,7 @@ func GetDerivedAddress(address string) string {
 	return ipPort[0] + ":" + strconv.Itoa(int(port+MagicDiff))
 }
 
-func SimpleHash(s string, bin int) int64{
+func SimpleHash(s string, bin int) int64 {
 	h := 0
 	for _, c := range s {
 		h = 31*h + int(c)

@@ -425,7 +425,7 @@ func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) erro
 }
 
 // Service unavailable, retry with known servers
-func (c *RaftKVClient) retryReqExceptActive(method, key string,data []byte) (*http.Response, error) {
+func (c *RaftKVClient) retryReqExceptActive(method, key string, data []byte) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 
@@ -457,7 +457,9 @@ func (c *RaftKVClient) Get(key string) error {
 		resp, err = c.retryReqExceptActive(http.MethodGet, key, nil)
 	}
 
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -490,7 +492,9 @@ func (c *RaftKVClient) Set(key string, value int64) error {
 		fmt.Printf("err: %s\n", err)
 		resp, err = c.retryReqExceptActive(http.MethodPost, key, reqBody)
 	}
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -520,7 +524,9 @@ func (c *RaftKVClient) Delete(key string) error {
 		resp, err = c.retryReqExceptActive(http.MethodDelete, key, nil)
 	}
 
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	if resp.StatusCode == http.StatusOK {
 		color.HiGreen("OK")
@@ -569,7 +575,7 @@ func (c *RaftKVClient) OptimizeTxnCommands() {
 	c.txnCmds.Commands = newCmds
 }
 
-func (c *RaftKVClient) AddTransaction(cmdArr []string ) error {
+func (c *RaftKVClient) AddTransaction(cmdArr []string) error {
 	amount, _ := parseInt64(cmdArr[2])
 	if amount == 0 {
 		return errors.New("Non-zero value expected")
@@ -629,7 +635,7 @@ func (c *RaftKVClient) attemptAdd(key string, amount int64) error {
 	return nil
 }
 
-func (c* RaftKVClient) transactionRedirectReqToLeader(reqBody []byte) (*raftpb.RaftCommand, error) {
+func (c *RaftKVClient) transactionRedirectReqToLeader(reqBody []byte) (*raftpb.RaftCommand, error) {
 	var resp *http.Response
 	var err error
 
@@ -661,7 +667,9 @@ func (c *RaftKVClient) transactionRetryReq(reqBody []byte) (*http.Response, erro
 
 	currActiveServer := c.serverAddr
 	for _, value := range staticCoordServers {
-		if value == currActiveServer { continue }
+		if value == currActiveServer {
+			continue
+		}
 		c.serverAddr = value
 		fmt.Printf("Retrying with alternate server:%s\n", c.serverAddr)
 		resp, err = c.newTxnRequest(reqBody)

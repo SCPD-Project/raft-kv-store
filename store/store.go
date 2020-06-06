@@ -21,12 +21,11 @@ import (
 
 const (
 	SnapshotPersistFile = "persistedKeyValues.db"
-	ShardsDirectory = "/raft-store/shards"
+	ShardsDirectory     = "/raft-store/shards"
 	// StoreInstance is used to identify the type of raft instance
 	StoreInstance  = "Store"
 	CohortInstance = "Cohort"
 )
-
 
 // Store is a simple key-value store, where all changes are made via Raft consensus.
 type Store struct {
@@ -73,7 +72,7 @@ func NewStore(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSin
 		rpcAddress:        rpcAddress,
 		persistKvDbConn:   persistDbConn,
 		persistBucketName: bucketName,
-		RaftDir: shardsDir,
+		RaftDir:           shardsDir,
 	}
 
 	ra, err := common.SetupRaft((*fsm)(s), s.ID, s.RaftAddress, shardsDir, enableSingle)

@@ -61,9 +61,9 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 	}
 
 	c := &Coordinator{
-		ID:          nodeID,
-		RaftAddress: raftAddress,
-		RaftDir:     coordDir,
+		ID:           nodeID,
+		RaftAddress:  raftAddress,
+		RaftDir:      coordDir,
 		ShardToPeers: shardToPeers,
 		txMap:        make(map[string]*raftpb.GlobalTransaction),
 		log:          log,

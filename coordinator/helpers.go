@@ -47,7 +47,6 @@ func (c *Coordinator) FindLeader(key string) (string, int64, error) {
 	for _, nodeAddr := range nodes {
 		leader, err := c.Leader(nodeAddr)
 
-
 		if err == nil && leader != "" {
 			return nodeAddr, shardID, nil
 		}
