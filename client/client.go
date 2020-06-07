@@ -37,14 +37,6 @@ func (err *insufficientFundsError) Error() string {
 	return fmt.Sprintf("Insufficient funds: %d < %d in %s", err.remain, err.expect, err.key)
 }
 
-/*type serverUnavailableError struct {
-	err            string
-}
-
-func (err *serverUnavailableError) Error() string {
-	return fmt.Sprintf("err: %s", err)
-}*/
-
 func parseInt64(s string) (int64, error) {
 	return strconv.ParseInt(s, 10, 64)
 }
@@ -141,9 +133,9 @@ func (c *RaftKVClient) validEndTxn(cmdArr []string) error {
 	return nil
 }
 
-func (c *RaftKVClient) validExit(cmdArr []string) error {
+func (c *RaftKVClient) validCmd0(cmdArr []string) error {
 	if len(cmdArr) != 1 {
-		return errors.New("Invalid exit command. Correct syntax: exit")
+		return fmt.Errorf("Invalid %[1]s command. Correct syntax: %[1]s", cmdArr[0])
 	}
 	return nil
 }
@@ -176,8 +168,8 @@ func (c *RaftKVClient) validCmd(cmdArr []string) error {
 		return c.validTxn(cmdArr)
 	case common.ENDTXN:
 		return c.validEndTxn(cmdArr)
-	case common.EXIT:
-		return c.validExit(cmdArr)
+	case common.EXIT, common.LEADER:
+		return c.validCmd0(cmdArr)
 	case common.TRANSFER:
 		return c.validTxnTransfer(cmdArr)
 	default:
@@ -344,6 +336,8 @@ func (c *RaftKVClient) Run() {
 			if err := c.AddTransaction(cmdArr); err != nil {
 				fmt.Println(err)
 			}
+		case common.LEADER:
+			fmt.Println(c.serverAddr)
 		case common.TXN:
 			c.TransactionRun(cmdArr)
 		case common.TRANSFER:
@@ -406,11 +400,12 @@ func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) erro
 	var err error
 	var body []byte
 
-	fmt.Printf("redirecting request to leader: %s\n", c.serverAddr)
+	fmt.Printf("Redirecting ==> %s\n", c.serverAddr)
 	resp, err = c.newRequest(method, key, data)
 	if err != nil {
-		fmt.Printf("err:%s", err)
+		fmt.Println(err)
 		resp, err = c.retryReqExceptActive(method, key, data)
+		fmt.Println("Cluster not available")
 		return err
 	}
 	defer resp.Body.Close()
@@ -441,10 +436,10 @@ func (c *RaftKVClient) retryReqExceptActive(method, key string, data []byte) (*h
 			continue
 		}
 		c.serverAddr = value
-		fmt.Printf("Retrying with alternate server:%s\n", c.serverAddr)
+		fmt.Printf("Retrying with: %s\n", c.serverAddr)
 		resp, err = c.newRequest(method, key, data)
 		if err != nil {
-			fmt.Printf("err: %s\n", err)
+			fmt.Println(err)
 			continue
 		}
 		return resp, nil // found a responsive node (not necessarily leader)
@@ -459,7 +454,7 @@ func (c *RaftKVClient) Get(key string) error {
 
 	resp, err = c.newRequest(http.MethodGet, key, nil)
 	if err != nil {
-		fmt.Printf("err: %s\n", err)
+		fmt.Println(err)
 		resp, err = c.retryReqExceptActive(http.MethodGet, key, nil)
 	}
 
@@ -495,7 +490,7 @@ func (c *RaftKVClient) Set(key string, value int64) error {
 	}
 	resp, err := c.newRequest(http.MethodPost, key, reqBody)
 	if err != nil {
-		fmt.Printf("err: %s\n", err)
+		fmt.Println(err)
 		resp, err = c.retryReqExceptActive(http.MethodPost, key, reqBody)
 	}
 	if err != nil {
@@ -526,7 +521,7 @@ func (c *RaftKVClient) Delete(key string) error {
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		fmt.Printf("err: %s\n", err)
+		fmt.Println(err)
 		resp, err = c.retryReqExceptActive(http.MethodDelete, key, nil)
 	}
 
@@ -646,7 +641,7 @@ func (c *RaftKVClient) transactionRedirectReqToLeader(reqBody []byte) (*raftpb.R
 	var err error
 	var body []byte
 
-	fmt.Printf("redirecting request to leader: %s\n", c.serverAddr)
+	fmt.Printf("Redirecting ==> %s\n", c.serverAddr)
 	resp, err = c.newTxnRequest(reqBody)
 	if err != nil {
 		resp, err = c.transactionRetryReq(reqBody)

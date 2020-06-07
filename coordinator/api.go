@@ -29,11 +29,13 @@ func (c *Coordinator) Get(key string) (int64, error) {
 	// Figure out
 	addr, _, err := c.FindLeader(key)
 	if err != nil {
+		c.log.Println(err)
 		return 0, err
 	}
 
 	client, err := rpc.DialHTTP("tcp", addr)
 	if err != nil {
+		c.log.Println(err)
 		return 0, err
 	}
 
@@ -63,7 +65,6 @@ func (c *Coordinator) Set(key string, value int64) error {
 	if err != nil {
 		return err
 	}
-
 	client, err := rpc.DialHTTP("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("Unable to reach shard at :%s", addr)
