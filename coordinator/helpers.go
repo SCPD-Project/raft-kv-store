@@ -11,13 +11,7 @@ import (
 
 // GetShardID return mapping from key to shardID
 func (c *Coordinator) GetShardID(key string) int64 {
-
-	h := 0
-	nshards := len(c.ShardToPeers)
-	for _, c := range key {
-		h = 31*h + int(c)
-	}
-	return int64(h % nshards)
+	return common.SimpleHash(key, len(c.ShardToPeers))
 }
 
 // Leader returns rpc address if the cohort is leader, otherwise return empty string
@@ -52,7 +46,6 @@ func (c *Coordinator) FindLeader(key string) (string, int64, error) {
 
 	for _, nodeAddr := range nodes {
 		leader, err := c.Leader(nodeAddr)
-
 
 		if err == nil && leader != "" {
 			return nodeAddr, shardID, nil

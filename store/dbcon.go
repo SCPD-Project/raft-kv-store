@@ -8,9 +8,9 @@ import (
 )
 
 type persistKvDB struct {
-	db *bolt.DB
+	db      *bolt.DB
 	options bolt.Options
-	log *log.Entry
+	log     *log.Entry
 }
 
 func newDBConn(file string, bucketName string, logger *log.Logger) (s *persistKvDB) {
@@ -27,17 +27,18 @@ func newDBConn(file string, bucketName string, logger *log.Logger) (s *persistKv
 			l.Fatalf(" Error in creating bucket: %s with err: %s", bucketName, err)
 		}
 		return nil
-	}); if err != nil {
+	})
+	if err != nil {
 		l.Fatalf(" Error on persist update conn with err: %s", err)
 	}
 
 	l.Infof("Successfully created persist db conn in directory %s, bucketName %s",
-			file, bucketName)
+		file, bucketName)
 
 	return persistConn
 }
 
-func(f *fsmSnapshot) save() {
+func (f *fsmSnapshot) save() {
 	err := f.persistDBConn.db.Batch(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(f.bucketName))
 
@@ -46,13 +47,14 @@ func(f *fsmSnapshot) save() {
 			binary.LittleEndian.PutUint64(buf, uint64(value))
 			err := b.Put([]byte(key), buf)
 			if err != nil {
-				f.persistDBConn.log.Warnf(" Snapshot save failed for bucket: %s, " +
+				f.persistDBConn.log.Warnf(" Snapshot save failed for bucket: %s, "+
 					"key: %s", f.bucketName, key)
 				return err
 			}
 		}
 		return nil
-	}); if err != nil{
+	})
+	if err != nil {
 		f.persistDBConn.log.Warnf(" Failed to persist snapshot for bucket: %s ", f.bucketName)
 	}
 }

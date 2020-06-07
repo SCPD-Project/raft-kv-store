@@ -76,6 +76,10 @@ func (c *RaftKVClient) setServerAddr(newAddr string) {
 	c.serverAddr = addURLScheme(newAddr)
 }
 
+func (c *RaftKVClient) SetTxnCmd(t *raftpb.RaftCommand) {
+	c.txnCmds = t
+}
+
 func (c *RaftKVClient) readString() []string {
 	var cmdArr []string
 	fmt.Print(">")
@@ -394,6 +398,7 @@ func (c *RaftKVClient) newTxnRequest(data []byte) (*http.Response, error) {
 func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) error {
 	var resp *http.Response
 	var err error
+	var body []byte
 
 	fmt.Printf("Redirecting ==> %s\n", c.serverAddr)
 	resp, err = c.newRequest(method, key, data)
@@ -404,14 +409,15 @@ func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) erro
 		return err
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return errors.New(string(body))
 	} else if resp.StatusCode == http.StatusOK {
-		if method == http.MethodGet {
-			color.HiGreen(string(body))
-		} else {
+		switch method {
+		case common.SET, common.DEL:
 			color.HiGreen("OK")
+		case common.GET:
+			color.HiGreen(string(body))
 		}
 		return nil
 	}
@@ -420,7 +426,7 @@ func (c *RaftKVClient) redirectReqToLeader(key, method string, data []byte) erro
 }
 
 // Service unavailable, retry with known servers
-func (c *RaftKVClient) retryReqExceptActive(method, key string,data []byte) (*http.Response, error) {
+func (c *RaftKVClient) retryReqExceptActive(method, key string, data []byte) (*http.Response, error) {
 	var resp *http.Response
 	var err error
 
@@ -452,7 +458,9 @@ func (c *RaftKVClient) Get(key string) error {
 		resp, err = c.retryReqExceptActive(http.MethodGet, key, nil)
 	}
 
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -485,7 +493,9 @@ func (c *RaftKVClient) Set(key string, value int64) error {
 		fmt.Println(err)
 		resp, err = c.retryReqExceptActive(http.MethodPost, key, reqBody)
 	}
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -515,7 +525,9 @@ func (c *RaftKVClient) Delete(key string) error {
 		resp, err = c.retryReqExceptActive(http.MethodDelete, key, nil)
 	}
 
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	if resp.StatusCode == http.StatusOK {
 		color.HiGreen("OK")
@@ -564,7 +576,7 @@ func (c *RaftKVClient) OptimizeTxnCommands() {
 	c.txnCmds.Commands = newCmds
 }
 
-func (c *RaftKVClient) AddTransaction(cmdArr []string ) error {
+func (c *RaftKVClient) AddTransaction(cmdArr []string) error {
 	amount, _ := parseInt64(cmdArr[2])
 	if amount == 0 {
 		return errors.New("Non-zero value expected")
@@ -624,9 +636,10 @@ func (c *RaftKVClient) attemptAdd(key string, amount int64) error {
 	return nil
 }
 
-func (c* RaftKVClient) transactionRedirectReqToLeader(reqBody []byte) (*raftpb.RaftCommand, error) {
+func (c *RaftKVClient) transactionRedirectReqToLeader(reqBody []byte) (*raftpb.RaftCommand, error) {
 	var resp *http.Response
 	var err error
+	var body []byte
 
 	fmt.Printf("Redirecting ==> %s\n", c.serverAddr)
 	resp, err = c.newTxnRequest(reqBody)
@@ -634,7 +647,7 @@ func (c* RaftKVClient) transactionRedirectReqToLeader(reqBody []byte) (*raftpb.R
 		resp, err = c.transactionRetryReq(reqBody)
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.New(string(body))
 	}
@@ -656,7 +669,9 @@ func (c *RaftKVClient) transactionRetryReq(reqBody []byte) (*http.Response, erro
 
 	currActiveServer := c.serverAddr
 	for _, value := range staticCoordServers {
-		if value == currActiveServer { continue }
+		if value == currActiveServer {
+			continue
+		}
 		c.serverAddr = value
 		fmt.Printf("Retrying with alternate server:%s\n", c.serverAddr)
 		resp, err = c.newTxnRequest(reqBody)
