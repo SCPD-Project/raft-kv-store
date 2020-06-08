@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-const networkLatency = 1000 * time.Nanosecond
+const networkLatency = 1 * time.Nanosecond
 
 func GetSet(m ConcurrentMap, finished chan struct{}) (set func(key string, value interface{}), get func(key string, value interface{})) {
 	return func(key string, value interface{}) {
