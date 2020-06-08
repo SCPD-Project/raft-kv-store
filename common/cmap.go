@@ -354,6 +354,5 @@ func txTimeout(txid string) time.Duration {
 	h := fnv.New32a()
 	h.Write([]byte(txid))
 	t := time.Duration(h.Sum32()%maxTryOutMicroSeconds)*time.Microsecond + LockContention
-	log.Printf("%s -> %t", txid, t)
 	return t
 }

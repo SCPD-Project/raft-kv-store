@@ -218,7 +218,7 @@ func TestCmap_MGet(t *testing.T) {
 	m1.MGet([]*raftpb.Command{
 		{Method: GET, Key: "a"},
 		{Method: GET, Key: "b"},
-	})
+	}, "0")
 	for k, expected := range map[string]interface{}{"a": int64(3), "b": int64(4)} {
 		actual, ok, err := m1.Get(k)
 		assert.Truef(t, err == nil, "Not error is expected for key %s", k)
