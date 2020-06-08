@@ -73,6 +73,5 @@ func (f *fsm) restore() (kv map[string]int64) {
 	}); err != nil {
 		f.persistKvDbConn.log.Fatalf(" Snapshot restore failed from bucket: %s ", f.persistBucketName)
 	}
-
 	return kv
 }
