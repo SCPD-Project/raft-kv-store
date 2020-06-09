@@ -169,11 +169,13 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 		}
 		// Note: this is fine to do. Coordinator will
 		// send abort and release the locks taken above
-		return errors.New("Unable to replicate during prepare")
+		return fmt.Errorf("Unable to replicate during prepare: %s", err)
 
-	case common.Commit:
+	case common.Prepared, common.Commit:
+
 		if c.opsMap[ops.Txid].Phase != common.Prepared {
 			// this should never happen
+			c.store.log.Errorf("Phase is:%s", c.opsMap[ops.Txid].Phase)
 			return errors.New("invalid state")
 		}
 
@@ -200,7 +202,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 		}
 		// Note: this is fine to do. Coordinator will
 		// will eventually try again during recovery
-		return errors.New("Unable to replicate during commit phase")
+		return fmt.Errorf("Unable to replicate during commit phase: %s", err)
 
 	case common.Abort:
 
@@ -218,7 +220,7 @@ func (c *Cohort) ProcessTransactionMessages(ops *raftpb.ShardOps, reply *raftpb.
 		}
 		// Note: this is fine to do. Coordinator will
 		// will eventually try again during recovery
-		return errors.New("Unable to replicate during Abort")
+		return fmt.Errorf("Unable to replicate during Abort:%s", err)
 
 	}
 

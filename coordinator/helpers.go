@@ -83,3 +83,65 @@ func (c *Coordinator) SendMessageToShard(ops *raftpb.ShardOps) ([]*raftpb.Comman
 	}
 	return response.Commands, errors.New(response.Phase)
 }
+
+// RetryCommit ...
+func (c *Coordinator) RetryCommit(txid string, gt *raftpb.GlobalTransaction) error {
+
+	c.log.Infof("Recovering transaction: %s performing Commit", txid)
+	var commitResponses int
+	numShards := len(gt.ShardToCommands)
+	for id, shardOps := range gt.ShardToCommands {
+		c.log.Infof("[txid %s] Phase for shard: %s -> %s", txid, id, shardOps.Phase)
+		if _, err := c.SendMessageToShard(shardOps); err == nil {
+			commitResponses++
+		} else {
+			c.log.Errorf("Sending message shard failed:%s", err)
+		}
+	}
+
+	if commitResponses != numShards {
+		return errors.New("recovery of transaction failed, retrying in next cycle")
+	}
+
+	gt.Phase = common.Committed
+	c.log.Infof("Setting txid:%s to :%s", txid, gt.Phase)
+	if err := c.Replicate(txid, common.SET, gt); err != nil {
+		return fmt.Errorf("[txid: %s] failed to set commited state: %s", txid, err)
+
+	}
+
+	c.log.Infof("[txid :%s] Commit Ack recieved: %d Ack Expected: %d", txid, commitResponses, numShards)
+	c.log.Infof("transaction recovery successfully for: %s", txid)
+	return nil
+}
+
+// RetryAbort ...
+func (c *Coordinator) RetryAbort(txid string, gt *raftpb.GlobalTransaction) error {
+
+	var err error
+	var abortMessages int
+	numShards := len(gt.ShardToCommands)
+	c.log.Infof("Recovering transaction: %s performing Abort", txid)
+	for _, shardops := range gt.ShardToCommands {
+		shardops.Phase = common.Abort
+		// best effort
+		_, err = c.SendMessageToShard(shardops)
+		if err != nil {
+			return fmt.Errorf("[txid %s] failed at %v with %s", txid, shardops, err.Error())
+		} else {
+			abortMessages++
+		}
+	}
+
+	if abortMessages != numShards {
+		return errors.New("recovery of transaction - abort failed")
+	}
+
+	gt.Phase = common.Aborted
+	// replicate via raft
+	if err := c.Replicate(txid, common.SET, gt); err != nil {
+		return fmt.Errorf("[txid: %s] failed to set Aborted state: %s", txid, err)
+	}
+	c.log.Infof("[txid: %s] Aborted Successfully during recovery", txid)
+	return nil
+}

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/raft"
@@ -13,6 +14,21 @@ import (
 	"github.com/raft-kv-store/config"
 	"github.com/raft-kv-store/raftpb"
 	log "github.com/sirupsen/logrus"
+)
+
+const (
+	// TransactionTimeout ...
+	TransactionTimeout = 5
+	// RecoveryInterval ...
+	RecoveryInterval = 60
+)
+
+const (
+	// FailPrepared indicates the transaction to fail after the prepare phase
+	FailPrepared = "prepared"
+
+	// FailCommit indicates the transaction to fail after the commit phase
+	FailCommit = "commit"
 )
 
 // Coordinator ...
@@ -26,18 +42,19 @@ type Coordinator struct {
 	// coordinator state - This has to be replicated.
 	// TODO: concurrent transactions
 	txMap map[string]*raftpb.GlobalTransaction
-	m     sync.Mutex
+	mu    sync.RWMutex
 
 	// ShardToPeers need to be populated based on a config.
 	// If time permits, these can be auto-discovered.
 	ShardToPeers map[int64][]string
 
-	Client *rpc.Client
-	log    *log.Entry
+	Client   *rpc.Client
+	log      *log.Entry
+	failmode string
 }
 
 // NewCoordinator initialises the new coordinator instance
-func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSingle bool) *Coordinator {
+func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, enableSingle bool, failmode string) *Coordinator {
 	if nodeID == "" {
 		nodeID = "node-" + common.RandNodeID(common.NodeIDLen)
 	}
@@ -55,6 +72,7 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	shardToPeers := make(map[int64][]string)
 	for i, shard := range shardsInfo.Shards {
 		shardToPeers[int64(i)] = append(shardToPeers[int64(i)], shard...)
@@ -67,6 +85,7 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 		ShardToPeers: shardToPeers,
 		txMap:        make(map[string]*raftpb.GlobalTransaction),
 		log:          log,
+		failmode:     failmode,
 	}
 
 	ra, err := common.SetupRaft((*fsm)(c), c.ID, c.RaftAddress, c.RaftDir, enableSingle)
@@ -76,7 +95,67 @@ func NewCoordinator(logger *log.Logger, nodeID, raftDir, raftAddress string, ena
 
 	c.raft = ra
 
+	go c.periodicRecovery()
+	log.Info("Starting coordniator")
 	return c
+}
+
+// periodicRecovery Runs periodically or on raft status changes.
+func (c *Coordinator) periodicRecovery() {
+
+	for {
+
+		select {
+		case <-c.raft.LeaderCh():
+			c.log.Infof("Leader Change")
+		case <-time.After(time.Duration(RecoveryInterval) * time.Second):
+		}
+
+		// Do this safety check
+		if c.IsLeader() && len(c.txMap) > 0 {
+			c.log.Infof("Starting Transaction Recovery")
+			c.recoverTransactions()
+		}
+
+	}
+}
+
+// recoverTransactions traverses the entire txid map and
+// takes below actions. This is similar to garbage collection aka
+// stop the world
+func (c *Coordinator) recoverTransactions() {
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var err error
+	for txid, gt := range c.txMap {
+		// 3 phases
+		// if transaction is not complete in 3 minutes
+		if time.Since(time.Unix(0, gt.StartTime)).Seconds() >= TransactionTimeout {
+
+			c.log.Infof("[txid: %s] is in phase :%s", txid, gt.GetPhase())
+			switch gt.GetPhase() {
+
+			case common.Prepare, common.Abort:
+				err = c.RetryAbort(txid, gt)
+				if err != nil {
+					c.log.Errorf("[txid: %s] recovery unsuccessfull :%s", txid, err)
+				}
+
+			case common.Prepared, common.Commit:
+				err = c.RetryCommit(txid, gt)
+				if err != nil {
+					c.log.Errorf("[txid: %s] recovery unsuccessfull :%s", txid, err)
+				}
+
+			case common.Aborted, common.Committed:
+				delete(c.txMap, txid)
+
+			}
+
+		}
+	}
 }
 
 // Replicate replicates put/get/deletes on coordinator's

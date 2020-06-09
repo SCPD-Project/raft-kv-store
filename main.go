@@ -35,6 +35,7 @@ var (
 	raftDir           string
 	nodeID            string
 	bucketName        string
+	failmode          string
 	isCoordinator     bool
 )
 
@@ -47,6 +48,7 @@ func init() {
 	flag.StringVarP(&joinHTTPAddress, "join", "j", "", "Set joining HTTP address, if any")
 	flag.StringVarP(&nodeID, "id", "i", "", "Node ID, randomly generated if not set")
 	flag.StringVarP(&raftDir, "dir", "d", "", "Raft directory, ./$(nodeID) if not set")
+	flag.StringVarP(&failmode, "fail", "t", "", "failure mode")
 	flag.IntVarP(&common.SnapshotInterval, "snapshotinterval", "", 180,
 		"Snapshot interval in seconds, 180 seconds if not set")
 	flag.IntVarP(&common.SnapshotThreshold, "snapshotthreshold", "", 5,
@@ -78,9 +80,11 @@ func main() {
 	log := logger.WithField("component", "main")
 
 	if isCoordinator {
-		c := coordinator.NewCoordinator(logger, nodeID, raftDir, raftAddress, joinHTTPAddress == "")
+		c := coordinator.NewCoordinator(logger, nodeID, raftDir, raftAddress, joinHTTPAddress == "", failmode)
 		h := httpd.NewService(logger, listenAddress, c)
 		h.Start(joinHTTPAddress)
+
+		log.Infof("coordinator started successfully")
 	} else {
 
 		// derive raftaddress for cohort

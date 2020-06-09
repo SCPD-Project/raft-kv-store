@@ -229,7 +229,7 @@ func (c *RaftKVClient) TransferTransaction(cmdArr []string) error {
 			retries++
 			var e *insufficientFundsError
 			if errors.As(err, &e) {
-				return fmt.Errorf("%s, aborting txn", err)
+				return fmt.Errorf("%s, connect timed out", err)
 			}
 			fmt.Printf("%s\nRetrying %d times...\n", err, retries)
 		} else {
@@ -238,7 +238,7 @@ func (c *RaftKVClient) TransferTransaction(cmdArr []string) error {
 		}
 	}
 
-	return errors.New("Retries exhausted, aborting txn")
+	return errors.New("Retries exhausted, connect timed out")
 }
 
 func (c *RaftKVClient) attemptTransfer(fromKey, toKey string, transferAmount int64) error {

@@ -30,15 +30,15 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 
 	switch command.Method {
 	case common.SET:
-		f.m.Lock()
-		defer f.m.Unlock()
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		// Resolving conflict, should figure out why?
 		if f.txMap != nil {
 			f.txMap[command.Key] = command.Gt
 		}
-
 	case common.DEL:
-		f.m.Lock()
-		defer f.m.Unlock()
+		f.mu.Lock()
+		defer f.mu.Unlock()
 		delete(f.txMap, command.Key)
 	default:
 		panic(fmt.Sprintf("unrecognized command: %+v", command))
@@ -49,8 +49,8 @@ func (f *fsm) Apply(l *raft.Log) interface{} {
 // Snapshot returns a snapshot of the key-value store.
 func (f *fsm) Snapshot() (raft.FSMSnapshot, error) {
 
-	f.m.Lock()
-	defer f.m.Unlock()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 
 	o := raftpb.TxidMap{
 		Map: make(map[string]*raftpb.GlobalTransaction),
