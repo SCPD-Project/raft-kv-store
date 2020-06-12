@@ -1,4 +1,5 @@
 # RAFT based Key-Value Store with Transaction Support
+[![SCPD-Project](https://circleci.com/gh/SCPD-Project/raft-kv-store/tree/master.svg?style=shield)](https://circleci.com/gh/SCPD-Project/raft-kv-store/tree/master)
 
 ## Description
 In this project, we present a highly available, consistent, fault tolerant distributed Key-Value Store. 
